@@ -22,9 +22,6 @@ class RavenController:
 
     async def start(self):
         """Inicializa las conexiones y registra los callbacks."""
-        # Nota: En un diseño más estricto, 'connect' podría ser parte de un puerto
-        # de ciclo de vida, pero para simplificar, asumimos que el adaptador que nos
-        # pasan tiene este método inicializador.
         if hasattr(self.display, 'connect'):
             await self.display.connect()
 
@@ -73,14 +70,24 @@ class RavenController:
             print(f"[CORE] Tiling activado: {estado}")
             
         elif action == "increment_gaps":
-            # Evitamos gaps matemáticamente negativos usando la función max()
             nuevo_gap = max(0, self.engine.config.default_gaps + payload)
             self.engine.config.default_gaps = nuevo_gap
             print(f"[CORE] Gaps actualizados a: {nuevo_gap}px")
             
-        # Al cambiar reglas matemáticas, forzamos un redibujado de todo el árbol
-        await self.handle_state_change()
+        elif action == "increment_master":
+            self.engine.config.nmaster += 1
+                
+        elif action == "decrement_master":
+            self.engine.config.nmaster = max(1, self.engine.config.nmaster - 1)
+            
+        elif action == "increase_ratio":
+            self.engine.config.master_ratio = min(0.9, self.engine.config.master_ratio + 0.05)
+            
+        elif action == "decrease_ratio":
+            self.engine.config.master_ratio = max(0.1, self.engine.config.master_ratio - 0.05)
 
+        # Al cambiar reglas matemáticas, forzamos un redibujado
+        await self.handle_state_change()
 
 async def main():
     print("Iniciando Raven Tiling Emulator...")

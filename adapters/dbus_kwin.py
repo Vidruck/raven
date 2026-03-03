@@ -50,6 +50,26 @@ class RavenEventsDBusService(ServiceInterface):
     @method(name="windowMinimizedChanged")
     def windowMinimizedChanged(self, window_id: 's', is_minimized: 'b'): # type: ignore
         self.adapter._handle_minimized_changed(window_id, is_minimized)
+    
+    @method(name="incrementMaster")
+    def incrementMaster(self): # type: ignore
+        print("[DBUS SERVER] Señal recibida: incrementMaster")
+        self.adapter._handle_shortcut("increment_master", None)
+
+    @method(name="decrementMaster")
+    def decrementMaster(self): # type: ignore
+        print("[DBUS SERVER] Señal recibida: decrementMaster")
+        self.adapter._handle_shortcut("decrement_master", None)
+
+    @method(name="increaseRatio")
+    def increaseRatio(self): # type: ignore
+        print("[DBUS SERVER] Señal recibida: increaseRatio")
+        self.adapter._handle_shortcut("increase_ratio", None)
+
+    @method(name="decreaseRatio")
+    def decreaseRatio(self): # type: ignore
+        print("[DBUS SERVER] Señal recibida: decreaseRatio")
+        self.adapter._handle_shortcut("decrease_ratio", None)
 
 class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
     def __init__(self):
@@ -65,9 +85,7 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
     def _handle_minimized_changed(self, window_id: str, is_minimized: bool):
         if window_id in self.known_windows:
             self.known_windows[window_id].is_minimized = is_minimized
-            # Disparamos el recálculo forzoso del mosaico
-            if self._on_window_created_cb:
-                asyncio.create_task(self._on_window_created_cb(window_id))
+            asyncio.create_task(self._delayed_state_change(window_id))
     async def connect(self):
         self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
         self.bus.export('/Events', RavenEventsDBusService(self))
@@ -86,6 +104,16 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
             pass            
         return json.dumps(commands)
 
+    async def _delayed_state_change(self, window_id: str):
+        """
+        Pausa táctica de 250ms. 
+        Permite que el motor de KWin finalice las animaciones nativas 
+        (minimizar/cerrar) antes de forzar la nueva geometría matemática.
+        """
+        await asyncio.sleep(0.25)
+        if self._on_window_created_cb:
+            await self._on_window_created_cb(window_id)
+
     # --- IMPLEMENTACIÓN DE EVENT LISTENER PORT ---
     def on_window_created(self, callback: Callable[[str], Awaitable[None]]):
         self._on_window_created_cb = callback
@@ -98,19 +126,17 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         self._on_shortcut_pressed_cb = callback
 
     def _handle_window_added(self, window_id: str, workspace_id: str, is_floating: bool):
-            self.known_windows[window_id] = WindowNode(
-                window_id=window_id, 
-                workspace_id=workspace_id, # <- Ya es dinámico
-                is_floating=is_floating
-            )
-            if self._on_window_created_cb:
-                asyncio.create_task(self._on_window_created_cb(window_id))
-
+        self.known_windows[window_id] = WindowNode(
+            window_id=window_id, 
+            workspace_id=workspace_id,
+            is_floating=is_floating
+        )
+        asyncio.create_task(self._delayed_state_change(window_id)) 
+        
     def _handle_window_removed(self, window_id: str):
         if window_id in self.known_windows:
             del self.known_windows[window_id]
-        if self._on_window_closed_cb:
-            asyncio.create_task(self._on_window_closed_cb(window_id))
+        asyncio.create_task(self._delayed_state_change(window_id))
 
     def _handle_shortcut(self, action: str, payload: Any):
         if self._on_shortcut_pressed_cb:

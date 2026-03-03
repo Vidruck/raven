@@ -57,6 +57,24 @@ function init() {
         if (!window) return;
         callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowRemoved", window.internalId.toString());
     });
+    // --- REGISTRO DE ATAJOS GLOBALES (GLOBAL SHORTCUTS) ---
+    // La API de KWin nos permite registrar atajos nativos en Preferencias del Sistema
+    
+    registerShortcut("Raven Increase Master", "Raven: Aumentar ventanas maestras", "Meta+I", function() {
+        callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "incrementMaster");
+    });
+    
+    registerShortcut("Raven Decrease Master", "Raven: Disminuir ventanas maestras", "Meta+D", function() {
+        callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "decrementMaster");
+    });
+    
+    registerShortcut("Raven Increase Ratio", "Raven: Expandir área maestra", "Meta+L", function() {
+        callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "increaseRatio");
+    });
+    
+    registerShortcut("Raven Decrease Ratio", "Raven: Encoger área maestra", "Meta+H", function() {
+        callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "decreaseRatio");
+    });
 
     listenForCommands();
 }
