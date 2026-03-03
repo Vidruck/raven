@@ -1,0 +1,20 @@
+# Entornos Virtuales
+.venv/
+venv/
+env/
+
+# Cachés de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos de Sistema Operativo
+.DS_Store
+Thumbs.db
+
+# Configuración de IDEs (VSCode, PyCharm)
+.vscode/
+.idea/
+
+# Archivos de empaquetado de KDE KWin
+adapters/kwin_script/*.kpackagetool6

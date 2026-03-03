@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Name": "Raven Bridge",
+        "Description": "Puente DBus para Raven Tiling Emulator",
+        "Icon": "preferences-system-windows-script-test",
+        "Id": "org.kde.raven.bridge",
+        "Version": "1.0",
+        "License": "MIT",
+        "Authors": [
+            {
+                "Name": "Vidruck",
+                "Email": "agonzalezh1908@alumno.ipn.mx"
+            }
+        ]
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js",
+    "KPackageStructure": "KWin/Script"
+}
