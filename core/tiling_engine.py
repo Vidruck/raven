@@ -48,56 +48,65 @@ class TilingEngine:
 
         return global_layout_map
 
-# --- EL MOTOR ORIGINAL (Renombrado y protegido) ---
+# --- EL MOTOR  ---
     def _calculate_single_workspace(self, windows: List[WindowNode], screen_rect: Rect) -> Dict[str, Rect]:
+        """
+        Algoritmo de Partición Espacial: Master-Stack Layout.
+        Escalable a N ventanas sin superposición (0(N)) de complejidad).
+        """
         layout_map = {}
+        # Filtramos las ventanas inválidas (flotantes o minimizadas)
         active_windows = [w for w in windows if not w.is_floating and not w.is_minimized]
         count = len(active_windows)
+        
+        if count == 0:
+            return layout_map
+        
         g = self.config.default_gaps
 
+        #Caso base: una sola ventana abarca todo el lienzo
         if count == 1:
-            layout_map[windows[0].window_id] = self.apply_gaps(screen_rect, g)
+            layout_map[active_windows[0].window_id] = self.apply_gaps(screen_rect, g)
+            return layout_map
+        #--- Area Maestra (izquierda) ---
+        master_win = active_windows[0]
+        #Usamos divisiones enteras para no entregar flotantes a Wayland
+        master_width = screen_rect.width // 2
 
-        elif count == 2:
-            half_width = screen_rect.width // 2
-            
-            rect_left = Rect(screen_rect.x, screen_rect.y, half_width, screen_rect.height)
-            layout_map[windows[0].window_id] = self.apply_gaps(rect_left, g)
-            
-            rect_right = Rect(screen_rect.x + half_width, screen_rect.y, half_width, screen_rect.height)
-            layout_map[windows[1].window_id] = self.apply_gaps(rect_right, g)
+        rect_master = Rect(screen_rect.x, screen_rect.y, master_width, screen_rect.height)
+        layout_map[master_win.window_id] = self.apply_gaps(rect_master, g)
 
-        elif count == 3:
-            half_width = screen_rect.width // 2
-            half_height = screen_rect.height // 2
-            
-            rect_master = Rect(screen_rect.x, screen_rect.y, half_width, screen_rect.height)
-            layout_map[windows[0].window_id] = self.apply_gaps(rect_master, g)
-            
-            rect_top_right = Rect(screen_rect.x + half_width, screen_rect.y, half_width, half_height)
-            layout_map[windows[1].window_id] = self.apply_gaps(rect_top_right, g)
-            
-            rect_bot_right = Rect(screen_rect.x + half_width, screen_rect.y + half_height, half_width, half_height)
-            layout_map[windows[2].window_id] = self.apply_gaps(rect_bot_right, g)
+        # --- Pila / stack (derecha) ---
+        stack_windows = active_windows[1:]
+        stack_count = len(stack_windows)
 
-        elif count == 4:
-            half_width = screen_rect.width // 2
-            half_height = screen_rect.height // 2
-            coords = [(0, 0), (half_width, 0), (0, half_height), (half_width, half_height)]
-            for i in range(4):
-                base_rect = Rect(screen_rect.x + coords[i][0], screen_rect.y + coords[i][1], half_width, half_height)
-                layout_map[windows[i].window_id] = self.apply_gaps(base_rect, g)
+        # El ancho de la pila absorbe el resto exacto del ancho total
+        stack_width = screen_rect.width - master_width
+        #Altura teórica de cada celda
+        base_stack_height = screen_rect.height // stack_count
 
-        else:
-            offset = 30 
-            cascade_w = int(screen_rect.width * 0.6)
-            cascade_h = int(screen_rect.height * 0.6)
-            for i, win in enumerate(windows):
-                cx = screen_rect.x + (i * offset)
-                cy = screen_rect.y + (i * offset)
-                if cx + cascade_w > screen_rect.width: cx = screen_rect.width - cascade_w
-                if cy + cascade_h > screen_rect.height: cy = screen_rect.height - cascade_h
-                base_rect = Rect(cx, cy, cascade_w, cascade_h)
-                layout_map[win.window_id] = self.apply_gaps(base_rect, g)
+        for i, win in enumerate(stack_windows):
+            current_y = screen_rect.y + (i * base_stack_height)
+
+            """
+            Compensación de la Pérdida de Pixeles (Pixel Loss Compensation)
+
+            Se implementa porque inevitablemente habra casos donde las operaciones generan decimales
+            al no compensarse, aparecen huecos negros. El compensamiento se realizará  haciendo que
+            la ultima  ventana de la pila absorba los sobrantes. 
+            
+            """
+            if i == stack_count -1:
+                current_height = screen_rect.height - (i * base_stack_height)
+            else:
+                current_height = base_stack_height
+
+            rect_stack = Rect(
+                x=screen_rect.x + master_width,
+                y=current_y,
+                width=stack_width,
+                height=current_height
+            )
+            layout_map[win.window_id] = self.apply_gaps(rect_stack, g)
 
         return layout_map
