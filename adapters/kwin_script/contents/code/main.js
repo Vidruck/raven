@@ -1,6 +1,4 @@
-// ==========================================
 // RAVEN BRIDGE - KDE PLASMA 6 (WAYLAND)
-// ==========================================
 
 function sendScreenGeometry(window) {
     if (!window || !window.output) return;
@@ -19,8 +17,7 @@ function init() {
     workspace.windowAdded.connect(function(window) {
         if (!window) return;
         
-        // --- CAPA 1: FILTRADO DE ÉLITE ---
-        // Ignoramos si: se salta la barra de tareas, se salta el selector (Alt+Tab) o es una ventana técnica
+        // --- CAPA 1: FILTRADO DE VENTANAS ---
         if (window.skipTaskbar || window.skipPager || window.skipSwitcher || !window.moveable || !window.resizeable) {
             return; 
         }
@@ -44,7 +41,7 @@ function init() {
             );
         });
 
-        // Reportamos el nacimiento
+        // Reportamos el nacimiento de ventanas
         callDBus(
             "org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowAdded", 
             windowId, workspaceId, isFloating
@@ -58,7 +55,6 @@ function init() {
         callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowRemoved", window.internalId.toString());
     });
     // --- REGISTRO DE ATAJOS GLOBALES (GLOBAL SHORTCUTS) ---
-    // La API de KWin nos permite registrar atajos nativos en Preferencias del Sistema
     
     registerShortcut("Raven Increase Master", "Raven: Aumentar ventanas maestras", "Meta+I", function() {
         callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "incrementMaster");
@@ -75,6 +71,13 @@ function init() {
     registerShortcut("Raven Decrease Ratio", "Raven: Encoger área maestra", "Meta+H", function() {
         callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "decreaseRatio");
     });
+
+    workspace.windowActivated.connect(function(window) {
+        if (!window) return;
+        var windowId = window.internalId.toString();
+        callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowActivated", windowId);
+    });
+
 
     listenForCommands();
 }
@@ -113,8 +116,8 @@ function applyCommands(commandsJson) {
                     handledOutputs.push(outName);
                 }
             }
-
-            // B. Luego enviamos el inventario de ventanas atadas a su monitor
+        
+            // B. Segundo enviamos el inventario de ventanas atadas a su monitor
             for (var k = 0; k < windows.length; k++) {
                 var w = windows[k];
                 if (!w.normalWindow && !w.dialog) continue;
@@ -130,6 +133,15 @@ function applyCommands(commandsJson) {
                     "org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowAdded", 
                     w.internalId.toString(), workspaceId, isFloating || false
                 );
+            }
+            
+        }
+        else if (cmd.action === "focus") {
+            for (var j = 0; j < windows.length; j++) {
+                if (windows[j].internalId.toString() === cmd.window_id) {
+                    workspace.activeWindow = windows[j];
+                    break;
+                }
             }
         }
     }

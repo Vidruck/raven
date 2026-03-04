@@ -32,7 +32,7 @@ class RavenController:
 
         print("[CONTROLADOR] Callbacks registrados. Ejecutando layout inicial...")
         
-        # Forzamos un acomodo inicial para las ventanas que ya estaban abiertas
+        # Forzamos un acomodo para las ventanas que ya estaban abiertas
         await self.handle_state_change()
 
     async def handle_state_change(self, window_id: str = None):
@@ -43,14 +43,14 @@ class RavenController:
             print(f"[EVENTO] Cambio detectado. Gatillo: Ventana {window_id}")
 
         try:
-            # 1. Leer el estado del mundo real (Ahora topológico)
+            # 1. Leer el estado del sistema (topológico)
             workspaces = await self.display.get_workspaces()
             windows = await self.display.get_all_windows()
 
             # 2. Procesar el estado en el dominio matemático (Motor Multi-Monitor)
             layout_map = self.engine.calculate_all_workspaces(windows, workspaces)
 
-            # 3. Modificar el mundo real con los resultados
+            # 3. Modificar el sitema con los resultados
             for win_id, rect in layout_map.items():
                 await self.display.set_window_geometry(win_id, rect)
                 
@@ -85,9 +85,37 @@ class RavenController:
             
         elif action == "decrease_ratio":
             self.engine.config.master_ratio = max(0.1, self.engine.config.master_ratio - 0.05)
+        elif action in ["focus_next", "focus_prev"]:
+            windows = await self.display.get_all_windows()
+            # Filtramos exactamente igual que el motor matemático
+            active_windows = [w for w in windows if not w.is_floating and not w.is_minimized]
+            
+            if not active_windows:
+                return
 
-        # Al cambiar reglas matemáticas, forzamos un redibujado
+            # Buscamos dónde estamos parados actualmente
+            current_idx = -1
+            active_id = getattr(self.display, 'active_window_id', None)
+            
+            for i, w in enumerate(active_windows):
+                if w.window_id == active_id:
+                    current_idx = i
+                    break
+                # Matemática de Ciclo Circular (Módulo)
+            if current_idx == -1:
+                next_idx = 0
+            else:
+                if action == "focus_next":
+                    next_idx = (current_idx + 1) % len(active_windows)
+                else:
+                    next_idx = (current_idx - 1) % len(active_windows)
+
+            target_win = active_windows[next_idx]
+            await self.display.set_active_window(target_win.window_id)
+            return # El cambio de foco no requiere recalcular la geometría
+        # Al cambio de reglas se fuerza un redibujado
         await self.handle_state_change()
+        
 
 async def main():
     print("Iniciando Raven Tiling Emulator...")

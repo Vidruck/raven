@@ -7,7 +7,6 @@ from dbus_next import BusType
 from dbus_next.service import ServiceInterface, method
 from dbus_next.constants import NameFlag
 
-# CORRECCIÓN 1: Importamos Workspace
 from core.models import Rect, WindowNode, Workspace 
 from ports.display_server import DisplayServerPort
 from ports.event_listener import EventListenerPort
@@ -20,6 +19,8 @@ class RavenEventsDBusService(ServiceInterface):
     def __init__(self, adapter: 'KWinDBusAdapter'):
         super().__init__('org.kde.raven.Events')
         self.adapter = adapter
+
+    #Definición de meétodos (estados de las ventanas)
 
     @method(name="windowAdded")
     def windowAdded(self, window_id: 's', workspace_id: 's', is_floating: 'b'): # type: ignore
@@ -71,6 +72,18 @@ class RavenEventsDBusService(ServiceInterface):
         print("[DBUS SERVER] Señal recibida: decreaseRatio")
         self.adapter._handle_shortcut("decrease_ratio", None)
 
+    @method(name="windowActivated")
+    def windowActivated(self, window_id: 's'): # type: ignore
+        self.adapter.active_window_id = window_id
+
+    @method(name="focusNext")
+    def focusNext(self): # type: ignore
+        self.adapter._handle_shortcut("focus_next", None)
+
+    @method(name="focusPrev")
+    def focusPrev(self): # type: ignore
+        self.adapter._handle_shortcut("focus_prev", None)
+
 class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
     def __init__(self):
         self.bus: Any = None
@@ -79,13 +92,16 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         self._on_shortcut_pressed_cb: Optional[Callable[[str, Any], Awaitable[None]]] = None
         self.known_windows: Dict[str, WindowNode] = {}
         self.command_queue = asyncio.Queue()
+        self.active_window_id: Optional[str] = None
         self.workspaces: Dict[str, Workspace] = {
             "default": Workspace(id="default", rect=Rect(0, 0, 1920, 1080))
         }
+
     def _handle_minimized_changed(self, window_id: str, is_minimized: bool):
         if window_id in self.known_windows:
             self.known_windows[window_id].is_minimized = is_minimized
             asyncio.create_task(self._delayed_state_change(window_id))
+            
     async def connect(self):
         self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
         self.bus.export('/Events', RavenEventsDBusService(self))
@@ -106,22 +122,27 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
 
     async def _delayed_state_change(self, window_id: str):
         """
-        Pausa táctica de 250ms. 
-        Permite que el motor de KWin finalice las animaciones nativas 
-        (minimizar/cerrar) antes de forzar la nueva geometría matemática.
+        Estrategia de Doble Toque (Double-Tap).
+        Dispara el reacomodo dos veces para burlar las animaciones pesadas de Wayland.
         """
-        await asyncio.sleep(0.25)
+        # Disparo 1: Para ventanas de la pila (animación rápida)
+        await asyncio.sleep(0.1)
+        if self._on_window_created_cb:
+            await self._on_window_created_cb(window_id)
+            
+        # Disparo 2: Para la ventana maestra (animación pesada + cambio de foco de Wayland)
+        await asyncio.sleep(0.3)
         if self._on_window_created_cb:
             await self._on_window_created_cb(window_id)
 
     # --- IMPLEMENTACIÓN DE EVENT LISTENER PORT ---
+
     def on_window_created(self, callback: Callable[[str], Awaitable[None]]):
         self._on_window_created_cb = callback
 
     def on_window_closed(self, callback: Callable[[str], Awaitable[None]]):
         self._on_window_closed_cb = callback
 
-    # CORRECCIÓN 2: Eliminamos la función duplicada on_shortcut_pressed vacía
     def on_shortcut_pressed(self, callback: Callable[[str, Any], Awaitable[None]]):
         self._on_shortcut_pressed_cb = callback
 
@@ -143,6 +164,7 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
             asyncio.create_task(self._on_shortcut_pressed_cb(action, payload))
 
     # --- IMPLEMENTACIÓN DE DISPLAY SERVER PORT ---
+    
     async def get_workspaces(self) -> Dict[str, Workspace]:
         return self.workspaces
     
@@ -162,4 +184,7 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         print(f"[DBUS OUT] Orden para KWin -> Ventana {window_id}: {rect}")
 
     async def set_active_window(self, window_id: str):
+        command = {"action": "focus", "window_id": window_id}
+        await self.command_queue.put(command)
+        print(f"[DBUS OUT] Orden para KWin -> Enfocar Ventana {window_id}")
         pass
