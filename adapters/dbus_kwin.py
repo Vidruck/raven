@@ -22,10 +22,9 @@ class RavenEventsDBusService(ServiceInterface):
 
     #Definición de meétodos (estados de las ventanas)
 
-    @method(name="windowAdded")
-    def windowAdded(self, window_id: 's', workspace_id: 's', is_floating: 'b'): # type: ignore
-        print(f"[DBUS] Ventana {window_id} en monitor {workspace_id}")
-        self.adapter._handle_window_added(window_id, workspace_id, is_floating)
+    def windowAdded(self, window_id: 's', workspace_id: 's', is_floating: 'b', is_minimized: 'b'): # type: ignore
+        print(f"[DBUS SERVER] Matriz {workspace_id} -> Ventana {window_id} (Minimizada: {is_minimized})")
+        self.adapter._handle_window_added(window_id, workspace_id, is_floating, is_minimized)
     @method(name="windowRemoved")
     def windowRemoved(self, window_id: 's'): # type: ignore
         print(f"[DBUS SERVER] Señal capturada de Wayland: Ventana cerrada {window_id}")
@@ -83,6 +82,11 @@ class RavenEventsDBusService(ServiceInterface):
     @method(name="focusPrev")
     def focusPrev(self): # type: ignore
         self.adapter._handle_shortcut("focus_prev", None)
+    
+    @method(name="windowWorkspaceChanged")
+    def windowWorkspaceChanged(self, window_id: 's', workspace_id: 's'): # type: ignore
+        print(f"[DBUS SERVER] Ventana {window_id} migró a la matriz {workspace_id}")
+        self.adapter._handle_workspace_changed(window_id, workspace_id)
 
 class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
     def __init__(self):
@@ -96,11 +100,22 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         self.workspaces: Dict[str, Workspace] = {
             "default": Workspace(id="default", rect=Rect(0, 0, 1920, 1080))
         }
+    
+    def _handle_workspace_changed(self, window_id: str, workspace_id: str):
+        """
+        Ejecuta la migración espacial. Si envías una ventana al Monitor 2, 
+        Python la reasigna y dispara el recálculo en ambos monitores.
+        """
+        if window_id in self.known_windows:
+            self.known_windows[window_id].workspace_id = workspace_id
+            # Disparamos el Doble Toque para redibujar el mundo
+            asyncio.create_task(self._delayed_state_change(window_id))
 
     def _handle_minimized_changed(self, window_id: str, is_minimized: bool):
         if window_id in self.known_windows:
             self.known_windows[window_id].is_minimized = is_minimized
             asyncio.create_task(self._delayed_state_change(window_id))
+
             
     async def connect(self):
         self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
@@ -125,12 +140,12 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         Estrategia de Doble Toque (Double-Tap).
         Dispara el reacomodo dos veces para burlar las animaciones pesadas de Wayland.
         """
-        # Disparo 1: Para ventanas de la pila (animación rápida)
+        # Disparo 1: Para ventanas de la pila (da respiro a la animación rápida)
         await asyncio.sleep(0.1)
         if self._on_window_created_cb:
             await self._on_window_created_cb(window_id)
             
-        # Disparo 2: Para la ventana maestra (animación pesada + cambio de foco de Wayland)
+        # Disparo 2: Para la ventana maestra (da respiro a la animación pesada + cambio de foco de Wayland)
         await asyncio.sleep(0.3)
         if self._on_window_created_cb:
             await self._on_window_created_cb(window_id)
@@ -146,13 +161,14 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
     def on_shortcut_pressed(self, callback: Callable[[str, Any], Awaitable[None]]):
         self._on_shortcut_pressed_cb = callback
 
-    def _handle_window_added(self, window_id: str, workspace_id: str, is_floating: bool):
+    def _handle_window_added(self, window_id: str, workspace_id: str, is_floating: bool, is_minimized: bool):
         self.known_windows[window_id] = WindowNode(
             window_id=window_id, 
             workspace_id=workspace_id,
-            is_floating=is_floating
+            is_floating=is_floating,
+            is_minimized=is_minimized # <-- el estado se hereda al nacer
         )
-        asyncio.create_task(self._delayed_state_change(window_id)) 
+        asyncio.create_task(self._delayed_state_change(window_id))
         
     def _handle_window_removed(self, window_id: str):
         if window_id in self.known_windows:
