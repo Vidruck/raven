@@ -5,13 +5,26 @@
 function getWorkspaceId(window) {
     var outName = window.output ? window.output.name : "default";
     var desktopId = "default_desk";
-    
     if (window.desktops && window.desktops.length > 0) {
         desktopId = window.desktops[0].id.toString();
     } else if (workspace.currentDesktop) {
         desktopId = workspace.currentDesktop.id.toString();
     }
     return outName + "||" + desktopId;
+}
+
+function isManageable(w) {
+    if (!w || w.deleted) return false;
+    
+    if (w.popupWindow || w.tooltip || w.onScreenDisplay || w.notification) return false;
+    
+    if (w.desktopWindow || w.dock || w.splash) return false;
+    
+    if (w.skipTaskbar || w.skipPager) return false;
+    
+    if (!w.normalWindow && !w.dialog) return false;
+    
+    return true;
 }
 
 // --- FOTOGRAFÍA DE ESTADO (SNAPSHOT) ---
@@ -23,11 +36,10 @@ function sendFullState() {
     
     for (var i = 0; i < windows.length; i++) {
         var w = windows[i];
-        if (!w.normalWindow && !w.dialog) continue;
+        
+        if (!isManageable(w)) continue;
         
         var wsId = getWorkspaceId(w);
-        
-        // Empaquetamos la geometría del monitor si es la primera vez que lo vemos:
         
         if (w.output && !screens[wsId]) {
             var desktop = (w.desktops && w.desktops.length > 0) ? w.desktops[0] : workspace.currentDesktop;
@@ -38,22 +50,15 @@ function sendFullState() {
             };
         }
 
-        var strClass = w.resourceClass ? w.resourceClass.toString().toLowerCase() : "";
         var strCap = w.caption ? w.caption.toString().toLowerCase() : "";
-        
-        var isKlipper = strClass.indexOf("klipper") !== -1 || strClass.indexOf("plasma.clipboard") !== -1;
-        var isSpectacle = strClass.indexOf("spectacle") !== -1;
         var isPip = strCap.indexOf("picture-in-picture") !== -1 || strCap.indexOf("imagen en imagen") !== -1;
-        var isSystemApp = w.utility || w.fullScreen || w.specialWindow;
-        
-        var isFloat = Boolean(w.dialog || isSystemApp || isSpectacle || isKlipper || isPip);
-        var isMin = Boolean(w.minimized);
+        var isFloat = Boolean(w.dialog || isPip);
         
         winState.push({
             id: w.internalId.toString(),
             ws: wsId,
             f: isFloat,
-            m: isMin
+            m: Boolean(w.minimized)
         });
     }
     
@@ -64,26 +69,19 @@ function sendFullState() {
 // --- VIGILANTE DE EVENTOS ---
 
 function bindWindow(w) {
+    if (!isManageable(w)) return;
     if (w.__raven_bound) return;
     w.__raven_bound = true;
     
-    // Cualquier cambio reporta el estado completo
-
     w.minimizedChanged.connect(sendFullState);
     w.outputChanged.connect(sendFullState);
     w.desktopsChanged.connect(sendFullState);
     
-    // ALGORITMO ANTI-JALONEO: Detecta el final exacto de un arrastre de ventana
     w.frameGeometryChanged.connect(function() {
         if (w.__was_moving && !w.interactiveMove) {
-
-            // Drop detectado: El usuario soltó el clic
-
             w.__was_moving = false;
             sendFullState(); 
         } else if (w.interactiveMove) {
-            // Drag en curso: El usuario tiene el clic presionado
-
             w.__was_moving = true;
         }
     });
@@ -98,7 +96,7 @@ function init() {
     }
 
     workspace.windowAdded.connect(function(w) {
-        if (w) {
+        if (isManageable(w)) {
             bindWindow(w);
             sendFullState();
         }
@@ -109,7 +107,9 @@ function init() {
     });
 
     workspace.windowActivated.connect(function(w) {
-        if (w) callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowActivated", w.internalId.toString());
+        if (w && isManageable(w)) {
+            callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowActivated", w.internalId.toString());
+        }
     });
 
     listenForCommands();
@@ -126,7 +126,6 @@ function applyCommands(commandsJson) {
         if (cmd.action === "move") {
             for (var j = 0; j < windows.length; j++) {
                 if (windows[j].internalId.toString() === cmd.window_id) {
-                    
                     if (windows[j].maximizeMode === 3) break; 
                     if (windows[j].interactiveMove || windows[j].interactiveResize) break; 
                     
@@ -152,12 +151,29 @@ function applyCommands(commandsJson) {
     }
 }
 
+// --- ALGORITMO WATCHDOG (Tolerancia a la Interfaz Gráfica) ---
+var _is_listening = false;
+
 function listenForCommands() {
+    if (_is_listening) return;
+    _is_listening = true;
+
     callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "getPendingCommands", function(response) {
+        _is_listening = false;
+        
         if (response) {
-            try { applyCommands(response); } catch (e) { print("[Raven] Error: " + e); }
+            try { applyCommands(response); } catch (e) { print("[Raven] Error de parseo: " + e); }
+            
+            listenForCommands(); 
+        } else {
+            print("[Raven Bridge] Demonio no responde. Activando Watchdog de reconexión (3s)...");
+            
+            var retryTimer = new QTimer();
+            retryTimer.interval = 3000;
+            retryTimer.singleShot = true;
+            retryTimer.triggered.connect(listenForCommands);
+            retryTimer.start();
         }
-        listenForCommands(); 
     });
 }
 
