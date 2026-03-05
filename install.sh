@@ -9,7 +9,7 @@ mkdir -p ~/.local/share/icons/hicolor/scalable/apps/
 mkdir -p ~/.local/share/applications/
 
 
-cp raven.svg ~/.local/share/icons/hicolor/scalable/apps/raven.svg
+cp icon/raven.svg ~/.local/share/icons/hicolor/scalable/apps/raven.svg
 cp raven.desktop ~/.local/share/applications/
 
 
