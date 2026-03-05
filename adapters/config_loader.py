@@ -3,6 +3,7 @@ from pathlib import Path
 from core.config import RavenConfig
 
 class ConfigLoader:
+    
     """Maneja la persistencia y lectura de las configuraciones del usuario."""
     
     def __init__(self):

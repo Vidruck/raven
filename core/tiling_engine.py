@@ -19,8 +19,6 @@ class TilingEngine:
             width=rect.width - (2 * gap),
             height=rect.height - (2 * gap)
         )
-    
-    # ---  MÉTODO PRINCIPAL ---
 
     def calculate_all_workspaces(self, windows: List[WindowNode], workspaces: Dict[str, Workspace]) -> Dict[str, Rect]:
         """
@@ -29,30 +27,23 @@ class TilingEngine:
         if not self.is_tiling_enabled or not windows or not workspaces:
             return {}
 
-        # 1. Agrupamieno las ventanas por Workspace (Monitor/Escritorio)
         windows_by_workspace = defaultdict(list)
         for win in windows:
             if not win.is_floating:
                 windows_by_workspace[win.workspace_id].append(win)
-
         global_layout_map = {}
 
-        # 2. Calculamos el layout de forma aislada para cada monitor
+
 
         for ws_id, workspace_windows in windows_by_workspace.items():
             if ws_id not in workspaces:
-                continue # Si no tenemos la geometría del monitor, ignoramos sus ventanas
-                
+                continue 
             workspace_rect = workspaces[ws_id].rect
-        
-            # Ejecutamos la matemática específica para este grupo
 
             ws_layout = self._calculate_single_workspace(workspace_windows, workspace_rect)
             global_layout_map.update(ws_layout)
 
         return global_layout_map
-
-# --- EL MOTOR  ---
 
     def _calculate_single_workspace(self, windows: List[WindowNode], screen_rect: Rect) -> Dict[str, Rect]:
         """
@@ -68,20 +59,14 @@ class TilingEngine:
 
         g = self.config.default_gaps
 
-        # Caso Base Absoluto
-
         if count == 1:
             layout_map[active_windows[0].window_id] = self.apply_gaps(screen_rect, g)
             return layout_map
 
-        # --- PREPARACIÓN DE CONSTANTES MATEMÁTICAS ---
-        # Aseguramos que nmaster no sea mayor que las ventanas actuales
 
         actual_nmaster = min(self.config.nmaster, count)
         ratio = self.config.master_ratio
         
-        # Caso : Tenemos ventanas suficientes para formar una pila a la derecha
-
         has_stack = count > actual_nmaster
 
         # --- CÁLCULO DE ÁREAS (EJE X) ---

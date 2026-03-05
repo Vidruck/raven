@@ -18,12 +18,8 @@ class RavenPreferencesWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Raven Control Center")
         self.setFixedSize(450, 420)
-        
-        # Ruta  de configuración
 
         self.config_path = Path.home() / ".config" / "raven" / "raven.json"
-        
-        # Estado por defecto de la topología
 
         self.config_data = {
             "default_gaps": 8, 
@@ -56,8 +52,6 @@ class RavenPreferencesWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # --- SECCIÓN 1: COMPORTAMIENTO ---
-
         group_behavior = QGroupBox("Comportamiento del Motor")
         layout_behavior = QVBoxLayout()
         self.chk_tiling = QCheckBox("Activar Tiling de forma predeterminada")
@@ -66,7 +60,6 @@ class RavenPreferencesWindow(QMainWindow):
         group_behavior.setLayout(layout_behavior)
         main_layout.addWidget(group_behavior)
 
-        # --- SECCIÓN 2: TOPOLOGÍA ESPACIAL  ---
 
         group_topology = QGroupBox("Algoritmo de Partición (Master-Stack)")
         layout_topology = QFormLayout()
@@ -85,8 +78,6 @@ class RavenPreferencesWindow(QMainWindow):
         group_topology.setLayout(layout_topology)
         main_layout.addWidget(group_topology)
 
-        # --- SECCIÓN 3: APARIENCIA ---
-
         group_appearance = QGroupBox("Apariencia y Geometría")
         layout_appearance = QVBoxLayout()
         
@@ -104,8 +95,6 @@ class RavenPreferencesWindow(QMainWindow):
 
         main_layout.addStretch()
 
-        # --- SECCIÓN 4: ORQUESTACIÓN ---
-
         layout_buttons = QHBoxLayout()
         btn_apply = QPushButton("Guardar Topología y Reiniciar Demonio")
         btn_apply.clicked.connect(self.apply_changes)
@@ -119,21 +108,16 @@ class RavenPreferencesWindow(QMainWindow):
 
     def apply_changes(self):
 
-        # 1. Mutación de estado en memoria
 
         self.config_data["default_gaps"] = self.slider_gaps.value()
         self.config_data["tiling_enabled_on_startup"] = self.chk_tiling.isChecked()
         self.config_data["nmaster"] = self.spin_nmaster.value()
         
-        # Redondeamos el float a 2 decimales para evitar artefactos en JSON (ej. 0.500000001)
 
         self.config_data["master_ratio"] = round(self.spin_ratio.value(), 2)
         
-        # 2. Persistencia
 
         self.save_config()
-
-        # 3. Interacción IPC vía Systemd
         
         try:
             subprocess.run(["systemctl", "--user", "restart", "raven.service"], check=True)

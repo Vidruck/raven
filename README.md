@@ -3,13 +3,13 @@
 Raven es un gestor de ventanas híbrido diseñado para **KDE Plasma 6 (Wayland)**. Combina la potencia de un motor matemático en Python con la integración nativa de KWin mediante una arquitectura de sincronización de estado atómico (*Snapshot-based Sync*).
 
 
-## 🚀 Innovación Arquitectónica: Snapshot-Based Sync
+## 🚀 Snapshot-Based Sync
 A diferencia de otros gestores como los basados en eventos diferenciales, Raven utiliza un modelo de **Consistencia Eventual Absoluta**. En cada cambio de composición, el puente de JavaScript captura una "fotografía" completa del estado de Wayland y la envía al demonio. Esto garantiza:
 - **Resiliencia:** El sistema se recupera instantáneamente de desconexiones de monitores (*Hotplugging*).
 - **Zero Jaloneo:** Gracias a filtros de interacción humana, las ventanas respetan el arrastre manual antes de ser absorbidas por el mosaico.
 - **Inmunidad a Tormentas por Apps:** Un regulador de flujo (*Throttler*) previene el colapso del bus de datos ante ráfagas de eventos de aplicaciones pesadas.
 
-## 🏗️ Estructura del Proyecto (Arquitectura Hexagonal)
+## 🏗️ Estructura del Proyecto: Arquitectura Hexagonal
 - `core/`: Motor matemático puro. Lógica de partición Master-Stack e invariantes geométricas.
 - `adapters/`: 
     - **DBus Adapter:** Servidor IPC de alto rendimiento.
