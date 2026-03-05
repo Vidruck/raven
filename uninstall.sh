@@ -38,5 +38,7 @@ if [[ $confirm == [sS] ]]; then
     echo "[5/5] Borrando ~/.config/raven/..."
     rm -rf "$HOME/.config/raven/"
 fi
+echo "Eliminando carpeta protegida..."
+rm -rf "$HOME/.local/share/raven"
 
 echo "✅ Raven ha sido eliminado de tu sistema. ¡Huélum!"
