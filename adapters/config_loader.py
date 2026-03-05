@@ -19,9 +19,12 @@ class ConfigLoader:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 print(f"[CONFIG] Preferencias cargadas desde {self.config_file}")
+                
                 return RavenConfig(
                     default_gaps=data.get("default_gaps", 8),
-                    tiling_enabled_on_startup=data.get("tiling_enabled_on_startup", True)
+                    tiling_enabled_on_startup=data.get("tiling_enabled_on_startup", True),
+                    nmaster=data.get("nmaster", 1),
+                    master_ratio=data.get("master_ratio", 0.5)
                 )
         except json.JSONDecodeError:
             print("[ERROR] JSON corrupto o mal formado. Usando memoria de respaldo.")
@@ -37,7 +40,9 @@ class ConfigLoader:
         
         data = {
             "default_gaps": default_config.default_gaps,
-            "tiling_enabled_on_startup": default_config.tiling_enabled_on_startup
+            "tiling_enabled_on_startup": default_config.tiling_enabled_on_startup,
+            "nmaster": default_config.nmaster,
+            "master_ratio": default_config.master_ratio
         }
         
         with open(self.config_file, 'w', encoding='utf-8') as f:

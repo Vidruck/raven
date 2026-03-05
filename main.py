@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import signal
 from typing import Any
 
 from core.tiling_engine import TilingEngine
@@ -11,46 +12,67 @@ from core.config import RavenConfig
 
 class RavenController:
     """
-    Servicio de Aplicación que orquesta el flujo de información.
-    Actúa como el 'pegamento' entre el dominio puro y los adaptadores impuros.
-    """
+    Orquestador de la aplicación (Application Service).
+
+    Actúa como el mediador entre el dominio puro (TilingEngine) y los 
+    adaptadores de infraestructura (KWin/DBus). Implementa la lógica de 
+    negocio de alto nivel para la gestión de ventanas.
+
+    Attributes:
+        engine: Instancia del motor lógico de mosaico.
+        display: Puerto de salida para comandos al servidor de pantalla.
+        events: Puerto de entrada para suscripción a eventos del sistema.
+     """
     def __init__(self, engine: TilingEngine, display: DisplayServerPort, events: EventListenerPort):
-        # Inyección de Dependencias: El controlador recibe los objetos ya creados.
+
+        """
+        Inicializa el controlador mediante Inyección de Dependencias.
+        """
+
         self.engine = engine
         self.display = display
         self.events = events
 
     async def start(self):
-        """Inicializa las conexiones y registra los callbacks."""
+
+        """
+        Inicializa el ciclo de vida de la aplicación.
+        Establece la conexión con el servidor de pantalla y registra los 
+        manejadores de eventos (callbacks) necesarios.
+        """
         if hasattr(self.display, 'connect'):
             await self.display.connect()
 
-        # Suscripción a eventos mediante el patrón Observer
         self.events.on_window_created(self.handle_state_change)
         self.events.on_window_closed(self.handle_state_change)
         self.events.on_shortcut_pressed(self.handle_shortcut)
 
         print("[CONTROLADOR] Callbacks registrados. Ejecutando layout inicial...")
-        
-        # Forzamos un acomodo para las ventanas que ya estaban abiertas
+
         await self.handle_state_change()
 
     async def handle_state_change(self, window_id: str = None):
+
         """
-        El flujo principal de Raven. Se ejecuta cada vez que el estado del mundo cambia.
+        Flujo principal de sincronización topológica.
+        
+        Extrae el estado actual del servidor, calcula la nueva disposición 
+        matemática y aplica los cambios geométricos resultantes.
+
+        Args:
+            window_id: Identificador opcional de la ventana que disparó el evento.
         """
+        
         if window_id:
             print(f"[EVENTO] Cambio detectado. Gatillo: Ventana {window_id}")
 
         try:
-            # 1. Leer el estado del sistema (topológico)
+
             workspaces = await self.display.get_workspaces()
             windows = await self.display.get_all_windows()
 
-            # 2. Procesar el estado en el dominio matemático (Motor Multi-Monitor)
             layout_map = self.engine.calculate_all_workspaces(windows, workspaces)
 
-            # 3. Modificar el sitema con los resultados
             for win_id, rect in layout_map.items():
                 await self.display.set_window_geometry(win_id, rect)
                 
@@ -61,7 +83,14 @@ class RavenController:
 
     async def handle_shortcut(self, action: str, payload: Any = None):
         """
-        Procesa las órdenes del teclado y muta el estado del motor matemático.
+        Manejador de señales de usuario (Atajos de teclado).
+        
+        Modifica el estado del motor de dominio o el foco del sistema 
+        basado en la entrada capturada por los adaptadores.
+
+        Args:
+            action: Nombre del comando a ejecutar.
+            payload: Datos adicionales necesarios para la acción.
         """
         print(f"[EVENTO] Atajo presionado: {action} (Payload: {payload})")
         
@@ -87,13 +116,12 @@ class RavenController:
             self.engine.config.master_ratio = max(0.1, self.engine.config.master_ratio - 0.05)
         elif action in ["focus_next", "focus_prev"]:
             windows = await self.display.get_all_windows()
-            # Filtramos exactamente igual que el motor matemático
+
             active_windows = [w for w in windows if not w.is_floating and not w.is_minimized]
             
             if not active_windows:
                 return
 
-            # Buscamos dónde estamos parados actualmente
             current_idx = -1
             active_id = getattr(self.display, 'active_window_id', None)
             
@@ -101,7 +129,6 @@ class RavenController:
                 if w.window_id == active_id:
                     current_idx = i
                     break
-                # Matemática de Ciclo Circular (Módulo)
             if current_idx == -1:
                 next_idx = 0
             else:
@@ -112,35 +139,52 @@ class RavenController:
 
             target_win = active_windows[next_idx]
             await self.display.set_active_window(target_win.window_id)
-            return # El cambio de foco no requiere recalcular la geometría
-        # Al cambio de reglas se fuerza un redibujado
+            return 
         await self.handle_state_change()
+
+async def _handle_focus_rotation(self, direction: str):
+        """Lógica interna para rotar el foco entre ventanas activas."""
+        windows = await self.display.get_all_windows()
+        active_windows = [w for w in windows if not w.is_floating and not w.is_minimized]
         
+        if not active_windows:
+            return
+
+        active_id = getattr(self.display, 'active_window_id', None)
+        current_idx = next((i for i, w in enumerate(active_windows) if w.window_id == active_id), -1)
+
+        if current_idx == -1:
+            next_idx = 0
+        else:
+            step = 1 if direction == "focus_next" else -1
+            next_idx = (current_idx + step) % len(active_windows)
+
+        await self.display.set_active_window(active_windows[next_idx].window_id)
 
 async def main():
     print("Iniciando Raven Tiling Emulator...")
+    loop = asyncio.get_running_loop()
+    def sigterm_handler():
+        print("\n[INFO] Señal SIGTER (Systemd) recibida. Apagando limpiamente...")
+        sys.exit(0) 
+    loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
 
-    # 1. Cargamos la configuración del sistema de archivos
     loader = ConfigLoader()
     app_config = loader.load()
 
-    # 2. Instanciamos el Dominio (Core) inyectándole la configuración
     engine = TilingEngine(config=app_config)
     kwin_adapter = KWinDBusAdapter()
 
-    # 3. Ensamblamos la aplicación inyectando las dependencias
     controller = RavenController(
         engine=engine,
         display=kwin_adapter,
         events=kwin_adapter
     )
 
-    # 4. Arrancamos el ciclo de vida
     await controller.start()
 
     print("[INFO] Raven operando en segundo plano. Presiona Ctrl+C para salir.")
-    
-    # Mantiene el bucle de eventos asíncrono vivo
+
     await asyncio.Future()
 
 if __name__ == '__main__':

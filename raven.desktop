@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Raven Control Center
+GenericName=Tiling Window Manager Config
+Comment=Panel de orquestación y topología espacial para el motor Raven en Wayland.
+Exec=/home/vidruck/Programas/raven/.venv/bin/python /home/vidruck/Programas/raven/gui/preferences.py
+Icon=raven
+Terminal=false
+Categories=Settings
+Keywords=tiling
+StartupNotify=true
