@@ -1,5 +1,13 @@
 # Raven Tiling Emulator 🐦
 
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)
+![Qt](https://img.shields.io/badge/Qt-%23217346.svg?style=for-the-badge&logo=Qt&logoColor=white)
+![Arch Linux](https://img.shields.io/badge/Arch%20Linux-1793D1?style=for-the-badge&logo=arch-linux&logoColor=white)
+![KDE](https://img.shields.io/badge/KDE%20Plasma-21D359?style=for-the-badge&logo=kde&logoColor=white)
+![Wayland](https://img.shields.io/badge/Wayland-9999ff?style=for-the-badge&logo=wayland&logoColor=white)
+![GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)
+
 Raven es un gestor de ventanas híbrido diseñado para **KDE Plasma 6 (Wayland)**. Combina la potencia de un motor matemático en Python con la integración nativa de KWin mediante una arquitectura de sincronización de estado atómico (*Snapshot-based Sync*).
 
 
@@ -21,6 +29,12 @@ A diferencia de otros gestores como los basados en eventos diferenciales, Raven 
 1. Clona el repositorio.
 2. Ejecuta `./install.sh`.
 3. Activa "Raven Bridge" en la configuración de KWin.
+
+## 🧹 Desinstalación
+Para eliminar completamente el proyecto ejecuta en terminal 
+
+`./uninstall.sh`. 
+
 
 ### Atajos Predeterminados
 | Tecla | Acción |
