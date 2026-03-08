@@ -46,12 +46,14 @@ function isManageable(w) {
  * @returns {boolean} True if the window should float (e.g., PiP, utilities, VMs).
  */
 function isFloating(w) {
-    if (w.dialog || w.utility || w.specialWindow) return true;
+    if (w.dialog || w.utility || w.specialWindow || w.modal || w.transientFor) return true;
     
     var strClass = w.resourceClass ? w.resourceClass.toString().toLowerCase() : "";
     var strCap = w.caption ? w.caption.toString().toLowerCase() : "";
-    
-    var isPip = strCap.indexOf("picture-in-picture") !== -1 || strCap.indexOf("imagen en imagen") !== -1 || w.keepAbove;
+    var isPip = strCap.indexOf("picture-in-picture") !== -1 || 
+                strCap.indexOf("imagen en imagen") !== -1 || 
+                strCap.indexOf("pip") !== -1 || 
+                w.keepAbove;
     var isSpectacle = strClass.indexOf("spectacle") !== -1;
     var isPortal = strClass.indexOf("xdg-desktop-portal") !== -1;
     var isKlipper = strClass.indexOf("klipper") !== -1 || strClass.indexOf("plasma.clipboard") !== -1;
@@ -196,14 +198,10 @@ function listenForCommands() {
         _is_listening = false;
         if (response) {
             try { applyCommands(response); } catch (e) { print("[Raven] Parse error: " + e); }
-            listenForCommands(); 
+            setTimeout(listenForCommands, 50); 
         } else {
             print("[Raven Bridge] Daemon unreachable. Watchdog engaged (3s retry)...");
-            var retryTimer = new QTimer();
-            retryTimer.interval = 3000;
-            retryTimer.singleShot = true;
-            retryTimer.triggered.connect(listenForCommands);
-            retryTimer.start();
+            setTimeout(listenForCommands, 3000);
         }
     });
 }
