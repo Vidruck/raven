@@ -45,8 +45,8 @@ class TilingEngine:
         return Rect(
             x=rect.x + gap,
             y=rect.y + gap,
-            width=rect.width - (2 * gap),
-            height=rect.height - (2 * gap)
+            width=max(1, rect.width - (2 * gap)),
+            height=max(1, rect.height - (2 * gap))
         )
 
     def calculate_all_workspaces(self, windows: List[WindowNode], workspaces: Dict[str, Workspace]) -> Dict[str, Rect]:

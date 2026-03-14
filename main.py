@@ -165,8 +165,9 @@ async def main():
     print("Iniciando Raven Tiling Emulator...")
     loop = asyncio.get_running_loop()
     def sigterm_handler():
-        print("\n[INFO] Señal SIGTER (Systemd) recibida. Apagando limpiamente...")
-        sys.exit(0) 
+        print("\n[INFO] Señal SIGTER (Systemd) recibida. Apagando...")
+        for task in asyncio.all_tasks(loop):
+            task.cancel()        
     loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
 
     loader = ConfigLoader()
@@ -185,11 +186,18 @@ async def main():
 
     print("[INFO] Raven operando en segundo plano. Presiona Ctrl+C para salir.")
 
-    await asyncio.Future()
+    try:
+        await asyncio.Future()
+    except asyncio.CancelledError:
+        print("[INFO] Ciclo principal cancelado por Systemd. Liberando recursos...")
+    finally:
+        print("[INFO] Motor Raven apagado limpiamente.")
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n[INFO] Apagado seguro de Raven ejecutado por el usuario.")
+        print("\n[INFO] Apagado seguro de Raven ejecutado por el usuario (Ctrl+C).")
+        sys.exit(0)
+    except asyncio.CancelledError:
         sys.exit(0)

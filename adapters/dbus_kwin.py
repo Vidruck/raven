@@ -9,7 +9,6 @@ TilingEngine with the KDE Plasma Wayland compositor.
 import json
 import asyncio
 from typing import List, Callable, Awaitable, Optional, Any, Dict
-
 from dbus_next.aio import MessageBus
 from dbus_next import BusType
 from dbus_next.service import ServiceInterface, method
@@ -158,21 +157,20 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         """Establishes the DBus session connection and exports the service."""
         self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
         self.bus.export('/Events', RavenEventsDBusService(self))
-        await self.bus.request_name('org.kde.raven.Daemon', NameFlag.DO_NOT_QUEUE)
+        await self.bus.request_name('org.kde.raven.Daemon', NameFlag.REPLACE_EXISTING)
         await self.command_queue.put({"action": "request_sync"})
 
     async def get_pending_commands_json(self) -> str:
         """Yields pending UI commands to the JS bridge using long-polling."""
         commands = []
         try:
-            primer_comando = await asyncio.wait_for(self.command_queue.get(), timeout=20.0)
+            primer_comando = await asyncio.wait_for(self.command_queue.get(), timeout=5.0)
             commands.append(primer_comando)
             while not self.command_queue.empty():
                 commands.append(self.command_queue.get_nowait())
         except asyncio.TimeoutError:
             pass            
         return json.dumps(commands)
-
     def on_window_created(self, callback: Callable[[str], Awaitable[None]]):
         self._on_window_created_cb = callback
 

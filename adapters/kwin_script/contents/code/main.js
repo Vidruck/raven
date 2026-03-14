@@ -7,12 +7,13 @@
 
 /**
  * Generates a unique identifier for a window's current workspace.
- * @param {object} window - The KWin window client object.
- * @returns {string} A composite ID formatted as "OutputName||DesktopID".
+ * Implementa contingencia (Fallback) para ventanas recién nacidas en Wayland.
  */
 function getWorkspaceId(window) {
-    var outName = window.output ? window.output.name : "default";
+    var output = window.output || workspace.activeOutput;
+    var outName = output ? output.name : "default";
     var desktopId = "default_desk";
+    
     if (window.desktops && window.desktops.length > 0) {
         desktopId = window.desktops[0].id.toString();
     } else if (workspace.currentDesktop) {
@@ -63,8 +64,7 @@ function isFloating(w) {
 }
 
 /**
- * Captures the current atomic state of all workspaces and windows, 
- * serializing it to JSON for the Python DBus Server.
+ * Captures the current atomic state of all workspaces and windows.
  */
 function sendFullState() {
     var windows = workspace.windowList();
@@ -76,9 +76,12 @@ function sendFullState() {
         if (!isManageable(w)) continue;
         
         var wsId = getWorkspaceId(w);
-        if (w.output && !screens[wsId]) {
+        var output = w.output || workspace.activeOutput; // Fallback forzado
+        
+        // Poblamos el diccionario de pantallas usando el output garantizado
+        if (output && !screens[wsId]) {
             var desktop = (w.desktops && w.desktops.length > 0) ? w.desktops[0] : workspace.currentDesktop;
-            var area = workspace.clientArea(0, w.output, desktop);
+            var area = workspace.clientArea(0, output, desktop);
             screens[wsId] = {
                 x: Math.round(area.x), y: Math.round(area.y),
                 w: Math.round(area.width), h: Math.round(area.height)
@@ -147,7 +150,6 @@ function init() {
 
 /**
  * Parses and executes geometric or focus commands dispatched by the Python Daemon.
- * @param {string} commandsJson - JSON encoded array of command objects.
  */
 function applyCommands(commandsJson) {
     if (!commandsJson) return;
@@ -162,10 +164,16 @@ function applyCommands(commandsJson) {
                     if (windows[j].maximizeMode === 3) break; 
                     if (windows[j].interactiveMove || windows[j].interactiveResize) break; 
                     
-                    windows[j].frameGeometry = {
-                        x: Math.round(cmd.x), y: Math.round(cmd.y),
-                        width: Math.round(cmd.width), height: Math.round(cmd.height)
-                    };
+                    var output = windows[j].output || workspace.activeOutput;
+                    var desktop = (windows[j].desktops && windows[j].desktops.length > 0) ? windows[j].desktops[0] : workspace.currentDesktop;
+                    var fresh_rect = workspace.clientArea(0, output, desktop);
+                    
+                    fresh_rect.x = Math.round(cmd.x);
+                    fresh_rect.y = Math.round(cmd.y);
+                    fresh_rect.width = Math.round(cmd.width);
+                    fresh_rect.height = Math.round(cmd.height);
+                    
+                    windows[j].frameGeometry = fresh_rect;
                     break;
                 }
             }
@@ -185,23 +193,57 @@ function applyCommands(commandsJson) {
 }
 
 var _is_listening = false;
+var _watchdog_timer = null;
+
+/**
+ * Envoltura nativa para interactuar con la clase C++ QTimer de Qt.
+ * Reemplaza a setTimeout en entornos QJSEngine restrictivos.
+ */
+function setKWinTimeout(callback, ms) {
+    var timer = new QTimer();
+    timer.interval = ms;
+    timer.singleShot = true;
+    timer.timeout.connect(callback);
+    timer.start();
+    return timer;
+}
+
+/**
+ * Destruye de forma segura el objeto QTimer en memoria.
+ * Reemplaza a clearTimeout.
+ */
+function clearKWinTimeout(timer) {
+    if (timer) {
+        timer.stop();
+    }
+}
 
 /**
  * Recursive asynchronous listener polling DBus for incoming commands.
- * Implements a Watchdog timer pattern for fault tolerance against daemon restarts.
+ * Utiliza QTimer nativo para evitar cuelgues del motor KWin.
  */
 function listenForCommands() {
     if (_is_listening) return;
     _is_listening = true;
 
-    callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "getPendingCommands", function(response) {
+    if (_watchdog_timer) clearKWinTimeout(_watchdog_timer);
+    
+    _watchdog_timer = setKWinTimeout(function() {
+        print("[Raven Bridge] Watchdog liberando candado muerto de DBus.");
         _is_listening = false;
+        listenForCommands();
+    }, 8000); 
+
+    callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "getPendingCommands", function(response) {
+        if (_watchdog_timer) clearKWinTimeout(_watchdog_timer);
+        _is_listening = false;
+        
         if (response) {
             try { applyCommands(response); } catch (e) { print("[Raven] Parse error: " + e); }
-            setTimeout(listenForCommands, 50); 
+            setKWinTimeout(listenForCommands, 50); 
         } else {
-            print("[Raven Bridge] Daemon unreachable. Watchdog engaged (3s retry)...");
-            setTimeout(listenForCommands, 3000);
+            print("[Raven Bridge] Demonio inalcanzable. Reintentando...");
+            setKWinTimeout(listenForCommands, 3000);
         }
     });
 }

@@ -1,12 +1,13 @@
 {
     "KPlugin": {
         "Authors": [{"Name": "Alejandro Gonzalez Hernández (Vidruck)"}],
+        "Category": "Utilities", 
         "Description": "Control rápido para Raven Tiling Engine",
         "Icon": "raven",
         "Id": "org.kde.raven.toggle",
         "Name": "Raven Toggle",
         "Version": "1.0",
-        "Website": "https://github.com/tu_usuario/raven"
+        "Website": "https://github.com/Vidruck/raven"
     },
     "KPackageStructure": "Plasma/Applet"
 }
