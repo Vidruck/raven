@@ -31,7 +31,7 @@ kpackagetool6 --type=Plasma/Applet --install adapters/plasmoid/ 2>/dev/null || \
 kpackagetool6 --type=Plasma/Applet --upgrade adapters/plasmoid/
 
 echo "[5/6] Configurando integración de escritorio..."
-cp icon/raven.svg ~/.local/share/icons/hicolor/scalable/apps/raven.svg
+cp icon/org.kde.raven.tiling.svg ~/.local/share/icons/hicolor/scalable/apps/raven.svg
 
 cat <<EOF > ~/.local/share/applications/raven.desktop
 [Desktop Entry]

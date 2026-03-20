@@ -24,7 +24,7 @@ fi
 
 echo "[3/5] Eliminando iconos y accesos directos..."
 [ -f "$HOME/.local/share/applications/raven.desktop" ] && rm "$HOME/.local/share/applications/raven.desktop"
-[ -f "$HOME/.local/share/icons/hicolor/scalable/apps/raven.svg" ] && rm "$HOME/.local/share/icons/hicolor/scalable/apps/raven.svg"
+[ -f "$HOME/.local/share/icons/hicolor/scalable/apps/org.kde.raven.tiling.svg" ] && rm "$HOME/.local/share/icons/hicolor/scalable/apps/raven.svg"
 
 update-desktop-database ~/.local/share/applications/
 

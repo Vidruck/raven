@@ -71,6 +71,16 @@ class RavenEventsDBusService(ServiceInterface):
     @method(name="focusPrev")
     def focusPrev(self):
         self.adapter._handle_shortcut("focus_prev", None)
+    
+    @method(name="getTilingState")
+    def getTilingState(self) -> 'b': # type: ignore
+        """
+        Endpoint RPC para que la UI consulte el estado actual del motor.
+        Retorna True si el mosaico está activo, False si está pausado.
+        """
+        if hasattr(self.adapter, 'engine'):
+            return self.adapter.engine.is_tiling_enabled
+        return True
 
 
 class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
@@ -139,10 +149,7 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         try:
             while self._recalc_pending:
                 self._recalc_pending = False
-                await asyncio.sleep(0.15)
-                if self._on_window_created_cb:
-                    await self._on_window_created_cb("sync")
-                await asyncio.sleep(0.35)
+                await asyncio.sleep(0.05)
                 if self._on_window_created_cb:
                     await self._on_window_created_cb("sync")
         except asyncio.CancelledError:

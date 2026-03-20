@@ -99,7 +99,15 @@ class TilingEngine:
             return layout_map
 
         g = self.config.default_gaps
+        half_g = g // 2
 
+        usable_rect = Rect(
+            x=screen_rect.x + half_g,
+            y=screen_rect.y + half_g,
+            width=screen_rect.width - g,
+            height=screen_rect.height - g
+        )
+        
         if count == 1:
             layout_map[active_windows[0].window_id] = self.apply_gaps(screen_rect, g)
             return layout_map
@@ -109,50 +117,37 @@ class TilingEngine:
         has_stack = count > actual_nmaster
 
         master_area_width = int(screen_rect.width * ratio) if has_stack else screen_rect.width
-        stack_area_width = screen_rect.width - master_area_width
+        stack_area_width = usable_rect.width - master_area_width
 
-        # 1. Master Area Rendering (Y-Axis distribution)
         master_windows = active_windows[:actual_nmaster]
-        base_master_height = screen_rect.height // actual_nmaster
+        base_master_height = usable_rect.height // actual_nmaster
 
         for i, win in enumerate(master_windows):
-            current_y = screen_rect.y + (i * base_master_height)
+            current_y = usable_rect.y + (i * base_master_height)
+            current_height = usable_rect.height - (i * base_master_height) if i == actual_nmaster - 1 else base_master_height
             
-            # Pixel Loss Compensation: Absorb rounding errors in the last window
-            if i == actual_nmaster - 1:
-                current_height = screen_rect.height - (i * base_master_height)
-            else:
-                current_height = base_master_height
+            rect_master = Rect(usable_rect.x, current_y, master_area_width, current_height)
+            layout_map[win.window_id] = self.apply_gaps(rect_master, half_g)
 
-            rect_master = Rect(
-                x=screen_rect.x,
-                y=current_y,
-                width=master_area_width,
-                height=current_height
-            )
-            layout_map[win.window_id] = self.apply_gaps(rect_master, g)
-
-        # 2. Stack Area Rendering (Y-Axis distribution)
         if has_stack:
             stack_windows = active_windows[actual_nmaster:]
             stack_count = len(stack_windows)
-            base_stack_height = screen_rect.height // stack_count
+            base_stack_height = usable_rect.height // stack_count
 
             for i, win in enumerate(stack_windows):
-                current_y = screen_rect.y + (i * base_stack_height)
+                current_y = usable_rect.y + (i * base_stack_height)
                 
-                # Pixel Loss Compensation
                 if i == stack_count - 1:
-                    current_height = screen_rect.height - (i * base_stack_height)
+                    current_height =  usable_rect.height - (i * base_stack_height)
                 else:
                     current_height = base_stack_height
 
                 rect_stack = Rect(
-                    x=screen_rect.x + master_area_width,
+                    x=usable_rect.x + master_area_width,
                     y=current_y,
                     width=stack_area_width,
                     height=current_height
                 )
-                layout_map[win.window_id] = self.apply_gaps(rect_stack, g)
+                layout_map[win.window_id] = self.apply_gaps(rect_stack, half_g)
 
         return layout_map

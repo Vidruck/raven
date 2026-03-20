@@ -175,6 +175,7 @@ async def main():
 
     engine = TilingEngine(config=app_config)
     kwin_adapter = KWinDBusAdapter()
+    kwin_adapter.engine = engine
 
     controller = RavenController(
         engine=engine,

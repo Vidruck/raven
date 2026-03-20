@@ -47,8 +47,11 @@ function isManageable(w) {
  * @returns {boolean} True if the window should float (e.g., PiP, utilities, VMs).
  */
 function isFloating(w) {
-    if (w.dialog || w.utility || w.specialWindow || w.modal || w.transientFor) return true;
     
+    if (w.dialog || w.utility || w.specialWindow || w.modal || w.transientFor) return true;
+    if (w.maximizeMode == 3 || w.fullScreen) return true;
+    if (w.onScreenDisplay || w.tooltip || w.notification || w.splash) return true;
+
     var strClass = w.resourceClass ? w.resourceClass.toString().toLowerCase() : "";
     var strCap = w.caption ? w.caption.toString().toLowerCase() : "";
     var isPip = strCap.indexOf("picture-in-picture") !== -1 || 
