@@ -1,7 +1,7 @@
 # Raven Tiling Emulator 🐦
 
 <p align="center">
-  <img src="icon/raven.svg" width="250" alt="Raven Logo">
+  <img src="icon/org.kde.raven.tiling.svg" width="250" alt="Raven Logo">
 </p>
 
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
