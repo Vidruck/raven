@@ -1,9 +1,9 @@
 """
-KWin DBus Infrastructure Adapter.
+Adaptador de Infraestructura DBus para KWin.
 
-Provides the implementation for the DisplayServerPort and EventListenerPort
-using the DBus IPC mechanism. It bridges the pure domain logic of the 
-TilingEngine with the KDE Plasma Wayland compositor.
+Proporciona la implementación para los puertos DisplayServerPort y EventListenerPort
+utilizando el mecanismo de comunicación entre procesos (IPC) de DBus. Sirve de puente 
+entre la lógica de dominio puro del TilingEngine y el compositor Wayland de KDE Plasma.
 """
 
 import json
@@ -21,8 +21,8 @@ from ports.event_listener import EventListenerPort
 
 class RavenEventsDBusService(ServiceInterface):
     """
-    Exposes methods over the DBus session bus for the KWin Javascript Bridge 
-    to trigger state syncs and query pending architectural commands.
+    Expone métodos sobre el bus de sesión de DBus para que el puente de Javascript (Javascript Bridge) 
+    de KWin dispare sincronizaciones de estado y consulte comandos arquitectónicos pendientes.
     """
     def __init__(self, adapter: 'KWinDBusAdapter'):
         super().__init__('org.kde.raven.Events')
@@ -75,8 +75,8 @@ class RavenEventsDBusService(ServiceInterface):
     @method(name="getTilingState")
     def getTilingState(self) -> 'b': # type: ignore
         """
-        Endpoint RPC para que la UI consulte el estado actual del motor.
-        Retorna True si el mosaico está activo, False si está pausado.
+        Punto de acceso RPC (RPC Endpoint) para que la interfaz de usuario (UI) consulte el estado actual del motor.
+        Retorna True si el mosaico (tiling) está activo, False si está pausado.
         """
         if hasattr(self.adapter, 'engine'):
             return self.adapter.engine.is_tiling_enabled
@@ -85,8 +85,8 @@ class RavenEventsDBusService(ServiceInterface):
 
 class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
     """
-    Implements DisplayServerPort and EventListenerPort to abstract Wayland specifics.
-    Handles rate-limiting (debouncing) and robust atomic state deserialization.
+    Implementa DisplayServerPort y EventListenerPort para abstraer los específicos de Wayland.
+    Maneja la limitación de frecuencia (debouncing) y la deserialización robusta del estado atómico.
     """
     def __init__(self):
         self.bus: Any = None
@@ -104,11 +104,11 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
 
     def _handle_sync_state(self, payload_json: str) -> None:
         """
-        Deserializes the atomic state snapshot received from the KWin bridge.
-        Overrides internal memory to ensure absolute eventual consistency.
+        Deserializa la captura del estado atómico (atomic state snapshot) recibida desde el puente de KWin.
+        Sobrescribe la memoria interna para asegurar una consistencia eventual absoluta.
         
         Args:
-            payload_json (str): Serialized dictionary containing screens and windows data.
+            payload_json (str): Diccionario serializado que contiene datos de pantallas y ventanas.
         """
         try:
             data = json.loads(payload_json)
@@ -132,12 +132,12 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
             self._trigger_recalculation()
             
         except Exception as e:
-            print(f"[ERROR] Snapshot parsing failed: {e}")
+            print(f"[ERROR] Falló el procesamiento de la captura (snapshot parsing): {e}")
 
     def _trigger_recalculation(self) -> None:
         """
-        Enqueues a layout calculation request. Implements throttling to prevent 
-        CPU starvation during burst events from the Wayland compositor.
+        Encola una solicitud de cálculo de disposición (layout). Implementa una regulación de flujo (throttling) 
+        para prevenir la saturación del CPU durante ráfagas de eventos del compositor Wayland.
         """
         self._recalc_pending = True
         if self._debounce_task and not self._debounce_task.done():
@@ -145,7 +145,7 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         self._debounce_task = asyncio.create_task(self._debounced_state_change())
    
     async def _debounced_state_change(self) -> None:
-        """Executes the calculation callback after stabilizing KWin animations."""
+        """Ejecuta la función de respuesta (callback) de cálculo tras estabilizar las animaciones de KWin."""
         try:
             while self._recalc_pending:
                 self._recalc_pending = False
@@ -156,19 +156,19 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
             pass
 
     def _handle_shortcut(self, action: str, payload: Any) -> None:
-        """Asynchronously dispatches a keyboard shortcut event to the controller."""
+        """Despacha de forma asíncrona un evento de atajo de teclado al controlador."""
         if self._on_shortcut_pressed_cb:
             asyncio.create_task(self._on_shortcut_pressed_cb(action, payload))
 
     async def connect(self) -> None:
-        """Establishes the DBus session connection and exports the service."""
+        """Establece la conexión de sesión de DBus y exporta el servicio."""
         self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
         self.bus.export('/Events', RavenEventsDBusService(self))
         await self.bus.request_name('org.kde.raven.Daemon', NameFlag.REPLACE_EXISTING)
         await self.command_queue.put({"action": "request_sync"})
 
     async def get_pending_commands_json(self) -> str:
-        """Yields pending UI commands to the JS bridge using long-polling."""
+        """Entrega comandos de UI pendientes al puente de JS utilizando espera larga (long-polling)."""
         commands = []
         try:
             primer_comando = await asyncio.wait_for(self.command_queue.get(), timeout=5.0)

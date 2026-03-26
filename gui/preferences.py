@@ -10,9 +10,9 @@ from PyQt6.QtCore import Qt
 
 class RavenPreferencesWindow(QMainWindow):
     """
-    Control Center Frontend para Raven Tiling Emulator.
+    Interfaz frontal (Frontend) del Centro de Control para Raven Tiling Emulator.
     Interactúa con la persistencia de datos (JSON) y orquesta 
-    el ciclo de vida del demonio en Arch Linux vía Systemd.
+    el ciclo de vida del proceso en segundo plano (daemon) en Arch Linux vía Systemd.
     """
     def __init__(self):
         super().__init__()
@@ -54,14 +54,14 @@ class RavenPreferencesWindow(QMainWindow):
 
         group_behavior = QGroupBox("Comportamiento del Motor")
         layout_behavior = QVBoxLayout()
-        self.chk_tiling = QCheckBox("Activar Tiling de forma predeterminada")
+        self.chk_tiling = QCheckBox("Activar Mosaico (Tiling) de forma predeterminada")
         self.chk_tiling.setChecked(self.config_data.get("tiling_enabled_on_startup", True))
         layout_behavior.addWidget(self.chk_tiling)
         group_behavior.setLayout(layout_behavior)
         main_layout.addWidget(group_behavior)
 
 
-        group_topology = QGroupBox("Algoritmo de Partición (Master-Stack)")
+        group_topology = QGroupBox("Algoritmo de Partición Maestro-Apilado (Master-Stack)")
         layout_topology = QFormLayout()
         
         self.spin_nmaster = QSpinBox()
@@ -96,7 +96,7 @@ class RavenPreferencesWindow(QMainWindow):
         main_layout.addStretch()
 
         layout_buttons = QHBoxLayout()
-        btn_apply = QPushButton("Guardar Topología y Reiniciar Demonio")
+        btn_apply = QPushButton("Guardar Topología y Reiniciar Proceso (Daemon)")
         btn_apply.clicked.connect(self.apply_changes)
         
         layout_buttons.addStretch()
@@ -121,9 +121,9 @@ class RavenPreferencesWindow(QMainWindow):
         
         try:
             subprocess.run(["systemctl", "--user", "restart", "raven.service"], check=True)
-            QMessageBox.information(self, "Despliegue Exitoso", "La topología ha sido actualizada.\nEl demonio Raven está corriendo con los nuevos parámetros.")
+            QMessageBox.information(self, "Despliegue Exitoso", "La topología ha sido actualizada.\nEl proceso Raven está corriendo con los nuevos parámetros.")
         except subprocess.CalledProcessError:
-            QMessageBox.critical(self, "Error de Orquestación", "No se pudo reiniciar el servicio raven.service.\nRevisa los logs de Systemd.")
+            QMessageBox.critical(self, "Error de Orquestación", "No se pudo reiniciar el servicio raven.service.\nRevisa los registros (logs) de Systemd.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -4,8 +4,8 @@ from core.models import Rect, WindowNode, Workspace
 
 class DisplayServerPort(ABC):
     """
-    Contrato abstracto. Define las operaciones que el núcleo de Raven 
-    necesita ejecutar sobre el Gestor de Ventanas del sistema.
+    Contrato abstracto (Abstract Contract). Define las operaciones que el núcleo (Core) de Raven 
+    necesita ejecutar sobre el Gestor de Ventanas (Window Manager) del sistema.
     """
 
     @abstractmethod

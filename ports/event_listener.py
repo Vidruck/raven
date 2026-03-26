@@ -9,15 +9,15 @@ class EventListenerPort(ABC):
 
     @abstractmethod
     def on_window_created(self, callback: Callable[[str], Awaitable[None]]):
-        """Registra un callback que se ejecutará cuando nazca una nueva ventana."""
+        """Registra una función de respuesta (callback) que se ejecutará cuando nazca una nueva ventana."""
         pass
 
     @abstractmethod
     def on_window_closed(self, callback: Callable[[str], Awaitable[None]]):
-        """Registra un callback que se ejecutará cuando una ventana sea destruida."""
+        """Registra una función de respuesta (callback) que se ejecutará cuando una ventana sea destruida."""
         pass
 
     @abstractmethod
     def on_shortcut_pressed(self, shortcut_name: str, callback: Callable[[], Awaitable[None]]):
-        """Registra un callback para atajos de teclado (ej. Toggle Tiling, Mover Foco)."""
+        """Registra una función de respuesta (callback) para atajos de teclado (ej. Alternar Mosaico / Toggle Tiling, Mover Foco)."""
         pass

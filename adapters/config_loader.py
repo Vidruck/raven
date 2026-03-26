@@ -4,7 +4,7 @@ from core.config import RavenConfig
 
 class ConfigLoader:
     
-    """Maneja la persistencia y lectura de las configuraciones del usuario."""
+    """Maneja la persistencia y lectura de las configuraciones (Config) del usuario."""
     
     def __init__(self):
         self.config_dir = Path.home() / ".config" / "raven"
@@ -13,7 +13,7 @@ class ConfigLoader:
     def load(self) -> RavenConfig:
         """Carga la configuración desde el disco o crea una por defecto."""
         if not self.config_file.exists():
-            print("[CONFIG] Archivo no encontrado. Generando configuración por defecto...")
+            print("[CONFIG] Archivo no encontrado. Generando configuración predeterminada (default)...")
             return self._create_default()
 
         try:
@@ -28,10 +28,10 @@ class ConfigLoader:
                     master_ratio=data.get("master_ratio", 0.5)
                 )
         except json.JSONDecodeError:
-            print("[ERROR] JSON corrupto o mal formado. Usando memoria de respaldo.")
+            print("[ERROR] Formato JSON corrupto o mal formado. Usando memoria de respaldo (fallback).")
             return RavenConfig()
         except Exception as e:
-            print(f"[ERROR CRÍTICO] Fallo de lectura IO: {e}. Usando memoria de respaldo.")
+            print(f"[ERROR CRÍTICO] Fallo de lectura Entrada/Salida (I/O): {e}. Usando memoria de respaldo (fallback).")
             return RavenConfig()
 
     def _create_default(self) -> RavenConfig:

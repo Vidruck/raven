@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Rect:
-    """Representa las coordenadas matemáticas en Wayland."""
+    """Representa un Rectángulo (Rect) con las coordenadas matemáticas en Wayland."""
     x: int
     y: int
     width: int
@@ -11,7 +11,7 @@ class Rect:
 @dataclass
 class Workspace:
     """
-    Representa un espacio de trabajo único.
+    Representa un Espacio de Trabajo (Workspace) único.
     Generalmente es la combinación de Monitor + Escritorio Virtual (ej. 'HDMI-A-1_Desktop1')
     """
     id: str
@@ -19,7 +19,7 @@ class Workspace:
 
 @dataclass
 class WindowNode:
-    """Representación lógica de una ventana administrada."""
+    """Representación lógica de una Ventana (Window Node) administrada."""
     def __init__(self, window_id: str, workspace_id: str, is_floating: bool = False, is_minimized: bool = False):
         self.window_id = window_id
         self.workspace_id = workspace_id 

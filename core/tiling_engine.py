@@ -1,9 +1,9 @@
 """
-Core Tiling Engine.
+Motor de Mosaico (Tiling Engine) de Raven.
 
-Implements the pure domain logic for calculating window geometries based on 
-a dynamic Master-Stack layout algorithm. Handles multi-monitor setups and 
-geometric invariants (e.g., Pixel Loss Compensation).
+Implementa la lógica de dominio puro para calcular la geometría de las ventanas 
+basándose en un algoritmo de disposición dinámica de Maestro-Apilado (Master-Stack). 
+Maneja configuraciones de múltiples monitores e invariantes geométricas (ej. Compensación de pérdida de píxeles).
 """
 
 from typing import List, Dict
@@ -13,34 +13,34 @@ from collections import defaultdict
 
 class TilingEngine:
     """
-    Main orchestration class for geometric calculations.
-    Maintains layout state decoupled from the OS infrastructure.
+    Clase de orquestación principal para cálculos geométricos.
+    Mantiene el estado de la disposición (layout) desacoplado de la infraestructura del sistema operativo.
     """
     def __init__(self, config: RavenConfig):
         """
-        Initializes the engine with user-defined preferences.
+        Inicializa el motor con las preferencias definidas por el usuario.
         
         Args:
-            config (RavenConfig): The persistent configuration model.
+            config (RavenConfig): El modelo de configuración persistente.
         """
         self.config = config
         self.is_tiling_enabled = config.tiling_enabled_on_startup
 
     def toggle_tiling(self) -> bool:
-        """Toggles the global tiling state."""
+        """Alterna el estado global del mosaico (tiling)."""
         self.is_tiling_enabled = not self.is_tiling_enabled
         return self.is_tiling_enabled
 
     def apply_gaps(self, rect: Rect, gap: int) -> Rect:
         """
-        Applies aesthetic margins by shrinking the available rectangle area.
+        Aplica márgenes estéticos reduciendo el área del rectángulo disponible.
         
         Args:
-            rect (Rect): The original computed geometry.
-            gap (int): Pixel padding to apply on all sides.
+            rect (Rect): La geometría calculada originalmente.
+            gap (int): Relleno de píxeles (padding) a aplicar en todos los lados.
             
         Returns:
-            Rect: The adjusted geometry.
+            Rect: La geometría ajustada.
         """
         return Rect(
             x=rect.x + gap,
@@ -51,14 +51,14 @@ class TilingEngine:
 
     def calculate_all_workspaces(self, windows: List[WindowNode], workspaces: Dict[str, Workspace]) -> Dict[str, Rect]:
         """
-        Maps all manageable windows across their respective outputs (workspaces).
+        Mapea todas las ventanas administrables en sus respectivas salidas (espacios de trabajo/workspaces).
         
         Args:
-            windows (List[WindowNode]): Flat list of atomic window states.
-            workspaces (Dict[str, Workspace]): Map of active outputs and their bounding boxes.
+            windows (List[WindowNode]): Lista plana de estados atómicos de las ventanas.
+            workspaces (Dict[str, Workspace]): Mapa de salidas activas y sus áreas delimitadoras (bounding boxes).
             
         Returns:
-            Dict[str, Rect]: Global map of Window IDs to their calculated geometric targets.
+            Dict[str, Rect]: Mapa global de IDs de ventana hacia sus objetivos geométricos calculados.
         """
         if not self.is_tiling_enabled or not windows or not workspaces:
             return {}
@@ -81,15 +81,15 @@ class TilingEngine:
 
     def _calculate_single_workspace(self, windows: List[WindowNode], screen_rect: Rect) -> Dict[str, Rect]:
         """
-        Performs the Master-Stack partition algorithm for a single workspace area.
-        Time Complexity: O(N) where N is the number of active windows.
+        Realiza el algoritmo de partición Maestro-Apilado (Master-Stack) para un área de espacio de trabajo única.
+        Complejidad Temporal: O(N) donde N es el número de ventanas activas.
         
         Args:
-            windows (List[WindowNode]): Windows assigned to this specific workspace.
-            screen_rect (Rect): The usable bounding box of the physical monitor.
+            windows (List[WindowNode]): Ventanas asignadas a este espacio de trabajo específico.
+            screen_rect (Rect): El área delimitadora utilizable del monitor físico.
             
         Returns:
-            Dict[str, Rect]: Local map of Window IDs to calculated coordinates.
+            Dict[str, Rect]: Mapa local de IDs de ventana hacia las coordenadas calculadas.
         """
         layout_map = {}
         active_windows = [w for w in windows if not w.is_floating and not w.is_minimized]

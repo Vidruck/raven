@@ -19,8 +19,8 @@ class RavenController:
     negocio de alto nivel para la gestión de ventanas.
 
     Attributes:
-        engine: Instancia del motor lógico de mosaico.
-        display: Puerto de salida para comandos al servidor de pantalla.
+        engine: Instancia del motor lógico de mosaico (tiling engine).
+        display: Puerto de salida para comandos al servidor de pantalla (display server).
         events: Puerto de entrada para suscripción a eventos del sistema.
      """
     def __init__(self, engine: TilingEngine, display: DisplayServerPort, events: EventListenerPort):
@@ -37,8 +37,8 @@ class RavenController:
 
         """
         Inicializa el ciclo de vida de la aplicación.
-        Establece la conexión con el servidor de pantalla y registra los 
-        manejadores de eventos (callbacks) necesarios.
+        Establece la conexión con el servidor de pantalla y registra las 
+        funciones de respuesta (callbacks) necesarias.
         """
         if hasattr(self.display, 'connect'):
             await self.display.connect()
@@ -47,7 +47,7 @@ class RavenController:
         self.events.on_window_closed(self.handle_state_change)
         self.events.on_shortcut_pressed(self.handle_shortcut)
 
-        print("[CONTROLADOR] Callbacks registrados. Ejecutando layout inicial...")
+        print("[CONTROLADOR] Funciones de respuesta (callbacks) registradas. Ejecutando disposición (layout) inicial...")
 
         await self.handle_state_change()
 
@@ -56,7 +56,7 @@ class RavenController:
         """
         Flujo principal de sincronización topológica.
         
-        Extrae el estado actual del servidor, calcula la nueva disposición 
+        Extrae el estado actual del servidor, calcula la nueva disposición (layout) 
         matemática y aplica los cambios geométricos resultantes.
 
         Args:
@@ -76,10 +76,10 @@ class RavenController:
             for win_id, rect in layout_map.items():
                 await self.display.set_window_geometry(win_id, rect)
                 
-            print(f"[CONTROLADOR] Mosaico recalculado en {len(workspaces)} pantallas para {len(layout_map)} ventanas.")
+            print(f"[CONTROLADOR] Mosaico (tiling) recalculado en {len(workspaces)} pantallas para {len(layout_map)} ventanas.")
             
         except Exception as e:
-            print(f"[ERROR] Fallo al recalcular el layout: {e}")
+            print(f"[ERROR] Falló al recalcular la disposición (layout): {e}")
 
     async def handle_shortcut(self, action: str, payload: Any = None):
         """
@@ -90,9 +90,9 @@ class RavenController:
 
         Args:
             action: Nombre del comando a ejecutar.
-            payload: Datos adicionales necesarios para la acción.
+            payload: Datos adicionales necesarios para la acción, carga útil (payload).
         """
-        print(f"[EVENTO] Atajo presionado: {action} (Payload: {payload})")
+        print(f"[EVENTO] Atajo presionado: {action} (Carga útil / Payload: {payload})")
         
         if action == "toggle_tiling":
             estado = self.engine.toggle_tiling()
@@ -101,7 +101,7 @@ class RavenController:
         elif action == "increment_gaps":
             nuevo_gap = max(0, self.engine.config.default_gaps + payload)
             self.engine.config.default_gaps = nuevo_gap
-            print(f"[CORE] Gaps actualizados a: {nuevo_gap}px")
+            print(f"[CORE] Márgenes (gaps) actualizados a: {nuevo_gap}px")
             
         elif action == "increment_master":
             self.engine.config.nmaster += 1
@@ -162,7 +162,7 @@ async def _handle_focus_rotation(self, direction: str):
         await self.display.set_active_window(active_windows[next_idx].window_id)
 
 async def main():
-    print("Iniciando Raven Tiling Emulator...")
+    print("Iniciando Raven Tiling Emulator (Emulador de Mosaico Raven)...")
     loop = asyncio.get_running_loop()
     def sigterm_handler():
         print("\n[INFO] Señal SIGTER (Systemd) recibida. Apagando...")
