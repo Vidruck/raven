@@ -58,6 +58,9 @@ function isFloating(w) {
                 strCap.indexOf("imagen en imagen") !== -1 || 
                 strCap.indexOf("pip") !== -1 || 
                 w.keepAbove;
+    if (isPip && !w.keepAbove){
+        w.keepAbove = true;
+    }
     var isSpectacle = strClass.indexOf("spectacle") !== -1;
     var isPortal = strClass.indexOf("xdg-desktop-portal") !== -1;
     var isKlipper = strClass.indexOf("klipper") !== -1 || strClass.indexOf("plasma.clipboard") !== -1;
@@ -66,43 +69,47 @@ function isFloating(w) {
     return Boolean(isPip || isSpectacle || isPortal || isKlipper || isVirtPopup);
 }
 
+var _sync_timer = null;
 /**
  * Captures the current atomic state of all workspaces and windows.
+ * Implements Event Coalescing to prevent DBus flooding.
  */
 function sendFullState() {
-    var windows = workspace.windowList();
-    var winState = [];
-    var screens = {};
+    if (_sync_timer) clearKWinTimeout(_sync_timer);
     
-    for (var i = 0; i < windows.length; i++) {
-        var w = windows[i];
-        if (!isManageable(w)) continue;
+    _sync_timer = setKWinTimeout(function() {
+        var windows = workspace.windowList();
+        var winState = [];
+        var screens = {};
         
-        var wsId = getWorkspaceId(w);
-        var output = w.output || workspace.activeOutput; // Fallback forzado
-        
-        // Poblamos el diccionario de pantallas usando el output garantizado
-        if (output && !screens[wsId]) {
-            var desktop = (w.desktops && w.desktops.length > 0) ? w.desktops[0] : workspace.currentDesktop;
-            var area = workspace.clientArea(0, output, desktop);
-            screens[wsId] = {
-                x: Math.round(area.x), y: Math.round(area.y),
-                w: Math.round(area.width), h: Math.round(area.height)
-            };
+        for (var i = 0; i < windows.length; i++) {
+            var w = windows[i];
+            if (!isManageable(w)) continue;
+            
+            var wsId = getWorkspaceId(w);
+            var output = w.output || workspace.activeOutput;
+            
+            if (output && !screens[wsId]) {
+                var desktop = (w.desktops && w.desktops.length > 0) ? w.desktops[0] : workspace.currentDesktop;
+                var area = workspace.clientArea(0, output, desktop);
+                screens[wsId] = {
+                    x: Math.round(area.x), y: Math.round(area.y),
+                    w: Math.round(area.width), h: Math.round(area.height)
+                };
+            }
+
+            winState.push({
+                id: w.internalId.toString(),
+                ws: wsId,
+                f: isFloating(w),
+                m: Boolean(w.minimized)
+            });
         }
-
-        winState.push({
-            id: w.internalId.toString(),
-            ws: wsId,
-            f: isFloating(w),
-            m: Boolean(w.minimized)
-        });
-    }
-    
-    var payload = { windows: winState, screens: screens };
-    callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "syncState", JSON.stringify(payload));
+        
+        var payload = { windows: winState, screens: screens };
+        callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "syncState", JSON.stringify(payload));
+    }, 80); 
 }
-
 /**
  * Attaches event listeners to a specific window to track state mutations.
  * Implements logic to detect the end of interactive user drags (Drop).

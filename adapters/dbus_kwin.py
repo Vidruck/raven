@@ -136,22 +136,22 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
 
     def _trigger_recalculation(self) -> None:
         """
-        Encola una solicitud de cálculo de disposición (layout). Implementa una regulación de flujo (throttling) 
-        para prevenir la saturación del CPU durante ráfagas de eventos del compositor Wayland.
+        Encola una solicitud de cálculo de disposición (layout). 
+        Implementa Trailing Edge Debouncing mediante cancelación de tareas.
         """
-        self._recalc_pending = True
         if self._debounce_task and not self._debounce_task.done():
-            return 
+            self._debounce_task.cancel()
         self._debounce_task = asyncio.create_task(self._debounced_state_change())
    
     async def _debounced_state_change(self) -> None:
-        """Ejecuta la función de respuesta (callback) de cálculo tras estabilizar las animaciones de KWin."""
+        """
+        Ejecuta el recálculo solo tras un período de 'silencio absoluto' en el bus de eventos.
+        """
         try:
-            while self._recalc_pending:
-                self._recalc_pending = False
-                await asyncio.sleep(0.05)
-                if self._on_window_created_cb:
-                    await self._on_window_created_cb("sync")
+            await asyncio.sleep(0.15)
+
+            if self._on_window_created_cb:
+                await self._on_window_created_cb("sync")
         except asyncio.CancelledError:
             pass
 
