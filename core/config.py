@@ -6,4 +6,6 @@ class RavenConfig:
     default_gaps: int = 8
     tiling_enabled_on_startup: bool = True
     nmaster: int = 1                
-    master_ratio: float = 0.5       
+    master_ratio: float = 0.5
+    pip_position: str = "bottom-right"
+    

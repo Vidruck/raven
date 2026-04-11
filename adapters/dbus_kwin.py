@@ -123,10 +123,11 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
             for w in data.get("windows", []):
                 win_id = w["id"]
                 new_windows[win_id] = WindowNode(
-                    window_id=win_id,
+                   window_id=win_id,
                     workspace_id=w["ws"],
                     is_floating=w["f"],
-                    is_minimized=w["m"] 
+                    is_minimized=w["m"],
+                    is_pip=w.get("p", False)
                 )
             self.known_windows = new_windows
             self._trigger_recalculation()

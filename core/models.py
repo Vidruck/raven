@@ -20,8 +20,8 @@ class Workspace:
 @dataclass
 class WindowNode:
     """Representación lógica de una Ventana (Window Node) administrada."""
-    def __init__(self, window_id: str, workspace_id: str, is_floating: bool = False, is_minimized: bool = False):
-        self.window_id = window_id
-        self.workspace_id = workspace_id 
-        self.is_floating = is_floating
-        self.is_minimized = is_minimized
+    window_id: str
+    workspace_id: str
+    is_floating: bool = False
+    is_minimized: bool = False
+    is_pip: bool = False

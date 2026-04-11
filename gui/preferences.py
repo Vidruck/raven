@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QSlider, QCheckBox, QPushButton, 
-                             QMessageBox, QGroupBox, QSpinBox, QDoubleSpinBox, QFormLayout)
+                             QMessageBox, QGroupBox, QSpinBox, QDoubleSpinBox, QFormLayout, QComboBox)
 from PyQt6.QtCore import Qt
 
 class RavenPreferencesWindow(QMainWindow):
@@ -16,21 +16,28 @@ class RavenPreferencesWindow(QMainWindow):
     """
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Raven Control Center")
-        self.setFixedSize(450, 420)
-
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.Dialog)
+        
         self.config_path = Path.home() / ".config" / "raven" / "raven.json"
-
         self.config_data = {
             "default_gaps": 8, 
             "tiling_enabled_on_startup": True,
             "nmaster": 1,
-            "master_ratio": 0.5
+            "master_ratio": 0.5,
+            "pip_position": "bottom-right"
         }
         
         self.load_config()
         self.init_ui()
+        self.center()
 
+    def center(self):
+        """Calcula el centro de la pantalla actual y mueve la ventana ahí."""
+        qr = self.frameGeometry()
+        cp = self.screen().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
+    
     def load_config(self):
         if self.config_path.exists():
             try:
@@ -95,6 +102,16 @@ class RavenPreferencesWindow(QMainWindow):
 
         main_layout.addStretch()
 
+        group_pip = QGroupBox("Configuración de Picture-in-Picture")
+        layout_pip = QFormLayout()
+        self.combo_pip = QComboBox()
+        self.combo_pip.addItems(["top-right", "top-left", "bottom-right", "bottom-left"])
+        current_pos = self.config_data.get("pip_position", "bottom-right")
+        self.combo_pip.setCurrentText(current_pos)
+        layout_pip.addRow("Ubicación en pantalla:", self.combo_pip)
+        group_pip.setLayout(layout_pip)
+        main_layout.addWidget(group_pip)
+
         layout_buttons = QHBoxLayout()
         btn_apply = QPushButton("Guardar Topología y Reiniciar Proceso (Daemon)")
         btn_apply.clicked.connect(self.apply_changes)
@@ -102,6 +119,7 @@ class RavenPreferencesWindow(QMainWindow):
         layout_buttons.addStretch()
         layout_buttons.addWidget(btn_apply)
         main_layout.addLayout(layout_buttons)
+
 
     def update_gap_label(self, value):
         self.lbl_gaps.setText(f"Márgenes (Gaps): {value} px")
@@ -112,11 +130,8 @@ class RavenPreferencesWindow(QMainWindow):
         self.config_data["default_gaps"] = self.slider_gaps.value()
         self.config_data["tiling_enabled_on_startup"] = self.chk_tiling.isChecked()
         self.config_data["nmaster"] = self.spin_nmaster.value()
-        
-
         self.config_data["master_ratio"] = round(self.spin_ratio.value(), 2)
-        
-
+        self.config_data["pip_position"] = self.combo_pip.currentText()
         self.save_config()
         
         try:
@@ -127,7 +142,8 @@ class RavenPreferencesWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyle("Fusion") 
+    app.setApplicationName("RavenConfig") 
+    app.setStyle("Fusion")
     window = RavenPreferencesWindow()
     window.show()
     sys.exit(app.exec())

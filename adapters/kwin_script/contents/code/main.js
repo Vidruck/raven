@@ -54,6 +54,7 @@ function isFloating(w) {
 
     var strClass = w.resourceClass ? w.resourceClass.toString().toLowerCase() : "";
     var strCap = w.caption ? w.caption.toString().toLowerCase() : "";
+    var isRaven = strClass.indexOf("raven") !== -1 || strCap.indexOf("raven control center") !== -1;
     var isPip = strCap.indexOf("picture-in-picture") !== -1 || 
                 strCap.indexOf("imagen en imagen") !== -1 || 
                 strCap.indexOf("pip") !== -1 || 
@@ -66,7 +67,7 @@ function isFloating(w) {
     var isKlipper = strClass.indexOf("klipper") !== -1 || strClass.indexOf("plasma.clipboard") !== -1;
     var isVirtPopup = (strClass.indexOf("qemu") !== -1 || strClass.indexOf("virt-manager") !== -1) && !w.normalWindow;
 
-    return Boolean(isPip || isSpectacle || isPortal || isKlipper || isVirtPopup);
+    return Boolean(isPip || isSpectacle || isPortal || isKlipper || isVirtPopup || isRaven);
 }
 
 var _sync_timer = null;
@@ -101,8 +102,9 @@ function sendFullState() {
             winState.push({
                 id: w.internalId.toString(),
                 ws: wsId,
-                f: isFloating(w),
-                m: Boolean(w.minimized)
+                f : isFloating(w),
+                m : Boolean(w.minimized),
+                p : (w.caption && w.caption.toLowerCase().indexOf("picture-in-picture") !== -1) || w.keepAbove
             });
         }
         

@@ -65,7 +65,7 @@ class TilingEngine:
 
         windows_by_workspace = defaultdict(list)
         for win in windows:
-            if not win.is_floating:
+            if not win.is_floating or win.is_pip:
                 windows_by_workspace[win.workspace_id].append(win)
                 
         global_layout_map = {}
@@ -73,9 +73,27 @@ class TilingEngine:
         for ws_id, workspace_windows in windows_by_workspace.items():
             if ws_id not in workspaces:
                 continue 
-            workspace_rect = workspaces[ws_id].rect
-            ws_layout = self._calculate_single_workspace(workspace_windows, workspace_rect)
+            screen = workspaces[ws_id].rect
+            ws_layout = self._calculate_single_workspace(workspace_windows, screen)
             global_layout_map.update(ws_layout)
+
+            pips = [w for w in workspace_windows if w.is_pip and not w.is_minimized]
+            pip_w = int (screen.width * 0.22)
+            pip_h = int (pip_w * 0.56)
+            gap = self.config.default_gaps
+
+            for win in pips:
+                pos = self.config.pip_position
+                x , y = screen.x + gap, screen.y + gap
+                if pos == "top-right":
+                    x = screen.x + screen.width - pip_w - gap
+                elif pos == "bottom-left":
+                    y = screen.y + screen.height - pip_h - gap
+                elif pos == "bottom-right":
+                    x = screen.x + screen.width - pip_w - gap
+                    y = screen.y + screen.height - pip_h - gap
+
+                global_layout_map[win.window_id] = Rect(x, y, pip_w, pip_h)
 
         return global_layout_map
 
