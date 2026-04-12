@@ -35,6 +35,7 @@ function isManageable(w) {
     if (w.skipTaskbar || w.skipPager) return false;
     
     var strClass = w.resourceClass ? w.resourceClass.toString().toLowerCase() : "";
+    var strCap = w.caption ? w.caption.toString().toLowerCase() : "";
     if (strClass.indexOf("spectacle") !== -1 && w.fullScreen) return false;
     if (!w.normalWindow && !w.dialog && !w.utility) return false;
     
@@ -124,6 +125,8 @@ function bindWindow(w) {
     w.minimizedChanged.connect(sendFullState);
     w.outputChanged.connect(sendFullState);
     w.desktopsChanged.connect(sendFullState);
+    w.captionChanged.connect(sendFullState);
+    w.windowClassChanged.connect(sendFullState);
     
     w.frameGeometryChanged.connect(function() {
         if (w.__was_moving && !w.interactiveMove) {

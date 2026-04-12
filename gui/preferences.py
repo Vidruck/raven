@@ -142,6 +142,7 @@ class RavenPreferencesWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setDesktopFileName("raven")
     app.setApplicationName("RavenConfig") 
     app.setStyle("Fusion")
     window = RavenPreferencesWindow()

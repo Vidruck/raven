@@ -80,18 +80,18 @@ class TilingEngine:
             pips = [w for w in workspace_windows if w.is_pip and not w.is_minimized]
             pip_w = int (screen.width * 0.22)
             pip_h = int (pip_w * 0.56)
-            gap = self.config.default_gaps
+            pip_gap = self.config.default_gaps + 10
 
             for win in pips:
                 pos = self.config.pip_position
-                x , y = screen.x + gap, screen.y + gap
+                x , y = screen.x + pip_gap, screen.y + pip_gap
                 if pos == "top-right":
-                    x = screen.x + screen.width - pip_w - gap
+                    x = screen.x + screen.width - pip_w - pip_gap
                 elif pos == "bottom-left":
-                    y = screen.y + screen.height - pip_h - gap
+                    y = screen.y + screen.height - pip_h - pip_gap
                 elif pos == "bottom-right":
-                    x = screen.x + screen.width - pip_w - gap
-                    y = screen.y + screen.height - pip_h - gap
+                    x = screen.x + screen.width - pip_w - pip_gap
+                    y = screen.y + screen.height - pip_h - pip_gap
 
                 global_layout_map[win.window_id] = Rect(x, y, pip_w, pip_h)
 

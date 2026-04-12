@@ -25,7 +25,8 @@ class ConfigLoader:
                     default_gaps=data.get("default_gaps", 8),
                     tiling_enabled_on_startup=data.get("tiling_enabled_on_startup", True),
                     nmaster=data.get("nmaster", 1),
-                    master_ratio=data.get("master_ratio", 0.5)
+                    master_ratio=data.get("master_ratio", 0.5),
+                    pip_position=data.get("pip_position", "bottom-right")
                 )
         except json.JSONDecodeError:
             print("[ERROR] Formato JSON corrupto o mal formado. Usando memoria de respaldo (fallback).")
@@ -43,7 +44,8 @@ class ConfigLoader:
             "default_gaps": default_config.default_gaps,
             "tiling_enabled_on_startup": default_config.tiling_enabled_on_startup,
             "nmaster": default_config.nmaster,
-            "master_ratio": default_config.master_ratio
+            "master_ratio": default_config.master_ratio,
+            "pip_position": default_config.pip_position
         }
         
         with open(self.config_file, 'w', encoding='utf-8') as f:
