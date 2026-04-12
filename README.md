@@ -21,6 +21,16 @@ A diferencia de otros gestores como los basados en eventos diferenciales, Raven 
 - **Zero Jaloneo:** Gracias a filtros de interacción humana, las ventanas respetan el arrastre manual antes de ser absorbidas por el mosaico.
 - **Inmunidad a Tormentas por Apps:** Un regulador de flujo (*Throttler*) previene el colapso del bus de datos ante ráfagas de eventos de aplicaciones pesadas.
 
+## 🌟 Características Destacadas (v1.0)
+**Motor de Tiling Maestro-Apilado:** Algoritmo determinista $O(N)$ con control dinámico de ratio y cantidad de ventanas maestras.
+- **Gestión Inteligente de PiP (Picture-in-Picture):** Detección proactiva de ventanas flotantes de video.
+  - **Anclaje dinámico:** Ubicación configurable en los cuatro cuadrantes de la pantalla (Superior/Inferior - Izquierda/Derecha).
+  - **Margen de Aislamiento:** Implementa un Gap adicional de $6px$ sobre el margen base para mejorar la jerarquía visual.
+- **Raven Control Center:** Interfaz nativa en PyQt6 que actúa como un diálogo flotante centrado, evitando interferencias con el área de trabajo activa.
+- **Resiliencia:** 
+  - **Event Coalescing:** El Bridge de KWin agrupa ráfagas de eventos (común en apps Java/Firefox) antes de sincronizar el estado.
+  - **Trailing Edge Debouncing:** El Daemon utiliza tareas asíncronas cancelables para evitar recálculos redundantes.
+
 ## 🏗️ Estructura del Proyecto: Arquitectura Hexagonal
 - `core/`: Motor matemático puro. Lógica de partición Master-Stack e invariantes geométricas.
 - `adapters/`: 
@@ -30,9 +40,16 @@ A diferencia de otros gestores como los basados en eventos diferenciales, Raven 
 - `gui/`: Centro de control nativo en PyQt6.
 
 ## 🛠️ Instalación y Uso
+El instalador cuenta con un mecanismo de gestión de entornos virtuales aislados y actualizado de dependencias inteligente compatible para distribuciones **Rolling Release.**
 1. Clona el repositorio.
 2. Ejecuta `./install.sh`.
 3. Activa "Raven Bridge" en la configuración de KWin.
+
+``` Bash
+git clone https://github.com/Vidruck/raven
+cd raven
+./install.sh
+```
 
 ## 🧹 Desinstalación
 Para eliminar completamente el proyecto ejecuta en terminal 
