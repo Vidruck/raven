@@ -113,7 +113,7 @@ class RavenPreferencesWindow(QMainWindow):
         main_layout.addWidget(group_pip)
 
         layout_buttons = QHBoxLayout()
-        btn_apply = QPushButton("Guardar Topología y Reiniciar Proceso (Daemon)")
+        btn_apply = QPushButton("Guardar y Reiniciar")
         btn_apply.clicked.connect(self.apply_changes)
         
         layout_buttons.addStretch()
