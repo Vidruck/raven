@@ -1,0 +1,21 @@
+[package]
+
+name = "raven_core_rs"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+
+name = "raven_core_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+
+pyo3 = { version = "0.21", default-features = false, features = ["extension-module", "abi3-py310", "macros"] }
+
+[profile.release]
+
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"

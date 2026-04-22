@@ -1,9 +1,6 @@
 """
 Motor de Mosaico (Tiling Engine) de Raven.
-
-Implementa la lógica de dominio puro para calcular la geometría de las ventanas 
-basándose en un algoritmo de disposición dinámica de Maestro-Apilado (Master-Stack). 
-Maneja configuraciones de múltiples monitores e invariantes geométricas (ej. Compensación de pérdida de píxeles).
+Refactorizado para soportar FFI con motor nativo de Rust.
 """
 
 from typing import List, Dict
@@ -11,37 +8,24 @@ from core.models import Rect, WindowNode, Workspace
 from core.config import RavenConfig
 from collections import defaultdict
 
+try:
+    import raven_core_rs as rust_engine
+    RUST_ENGINE_AVAILABLE = True
+    print("[CORE] Motor de Rust (raven_core_rs) cargado correctamente. Modo Ultra-Performance activado.")
+except ImportError:
+    RUST_ENGINE_AVAILABLE = False
+    print("[WARNING] Motor de Rust no encontrado. Revirtiendo al cálculo en Python.")
+
 class TilingEngine:
-    """
-    Clase de orquestación principal para cálculos geométricos.
-    Mantiene el estado de la disposición (layout) desacoplado de la infraestructura del sistema operativo.
-    """
     def __init__(self, config: RavenConfig):
-        """
-        Inicializa el motor con las preferencias definidas por el usuario.
-        
-        Args:
-            config (RavenConfig): El modelo de configuración persistente.
-        """
         self.config = config
         self.is_tiling_enabled = config.tiling_enabled_on_startup
 
     def toggle_tiling(self) -> bool:
-        """Alterna el estado global del mosaico (tiling)."""
         self.is_tiling_enabled = not self.is_tiling_enabled
         return self.is_tiling_enabled
 
     def apply_gaps(self, rect: Rect, gap: int) -> Rect:
-        """
-        Aplica márgenes estéticos reduciendo el área del rectángulo disponible.
-        
-        Args:
-            rect (Rect): La geometría calculada originalmente.
-            gap (int): Relleno de píxeles (padding) a aplicar en todos los lados.
-            
-        Returns:
-            Rect: La geometría ajustada.
-        """
         return Rect(
             x=rect.x + gap,
             y=rect.y + gap,
@@ -50,16 +34,6 @@ class TilingEngine:
         )
 
     def calculate_all_workspaces(self, windows: List[WindowNode], workspaces: Dict[str, Workspace]) -> Dict[str, Rect]:
-        """
-        Mapea todas las ventanas administrables en sus respectivas salidas (espacios de trabajo/workspaces).
-        
-        Args:
-            windows (List[WindowNode]): Lista plana de estados atómicos de las ventanas.
-            workspaces (Dict[str, Workspace]): Mapa de salidas activas y sus áreas delimitadoras (bounding boxes).
-            
-        Returns:
-            Dict[str, Rect]: Mapa global de IDs de ventana hacia sus objetivos geométricos calculados.
-        """
         if not self.is_tiling_enabled or not windows or not workspaces:
             return {}
 
@@ -74,17 +48,16 @@ class TilingEngine:
             if ws_id not in workspaces:
                 continue 
             screen = workspaces[ws_id].rect
+
             ws_layout = self._calculate_single_workspace(workspace_windows, screen)
             global_layout_map.update(ws_layout)
-
             pips = [w for w in workspace_windows if w.is_pip and not w.is_minimized]
-            pip_w = int (screen.width * 0.22)
-            pip_h = int (pip_w * 0.56)
+            pip_w = int(screen.width * 0.22)
+            pip_h = int(pip_w * 0.56)
             pip_gap = self.config.default_gaps + 10
-
             for win in pips:
                 pos = self.config.pip_position
-                x , y = screen.x + pip_gap, screen.y + pip_gap
+                x, y = screen.x + pip_gap, screen.y + pip_gap
                 if pos == "top-right":
                     x = screen.x + screen.width - pip_w - pip_gap
                 elif pos == "bottom-left":
@@ -96,19 +69,39 @@ class TilingEngine:
                 global_layout_map[win.window_id] = Rect(x, y, pip_w, pip_h)
 
         return global_layout_map
-
     def _calculate_single_workspace(self, windows: List[WindowNode], screen_rect: Rect) -> Dict[str, Rect]:
-        """
-        Realiza el algoritmo de partición Maestro-Apilado (Master-Stack) para un área de espacio de trabajo única.
-        Complejidad Temporal: O(N) donde N es el número de ventanas activas.
+        """Orquesta la ejecución matemática, delegando a Rust si está disponible."""
         
-        Args:
-            windows (List[WindowNode]): Ventanas asignadas a este espacio de trabajo específico.
-            screen_rect (Rect): El área delimitadora utilizable del monitor físico.
-            
-        Returns:
-            Dict[str, Rect]: Mapa local de IDs de ventana hacia las coordenadas calculadas.
-        """
+        if RUST_ENGINE_AVAILABLE:
+            rust_windows = [
+                rust_engine.WindowNode(
+                    window_id=w.window_id,
+                    workspace_id=w.workspace_id,
+                    is_floating=w.is_floating,
+                    is_minimized=w.is_minimized,
+                    is_pip=w.is_pip
+                ) for w in windows
+            ]
+
+            rust_screen = rust_engine.Rect(
+                x=screen_rect.x, y=screen_rect.y, 
+                width=screen_rect.width, height=screen_rect.height
+            )
+
+            rust_layout_map = rust_engine.calculate_layout(
+                rust_windows,
+                rust_screen,
+                self.config.nmaster,
+                self.config.master_ratio,
+                self.config.default_gaps
+            )
+            return {
+                w_id: Rect(x=r.x, y=r.y, width=r.width, height=r.height) 
+                for w_id, r in rust_layout_map.items()
+            }
+        
+        #FALLBACK
+
         layout_map = {}
         active_windows = [w for w in windows if not w.is_floating and not w.is_minimized]
         count = len(active_windows)
@@ -154,11 +147,7 @@ class TilingEngine:
 
             for i, win in enumerate(stack_windows):
                 current_y = usable_rect.y + (i * base_stack_height)
-                
-                if i == stack_count - 1:
-                    current_height =  usable_rect.height - (i * base_stack_height)
-                else:
-                    current_height = base_stack_height
+                current_height =  usable_rect.height - (i * base_stack_height) if i == stack_count - 1 else base_stack_height
 
                 rect_stack = Rect(
                     x=usable_rect.x + master_area_width,
