@@ -6,18 +6,21 @@ TARGET_DIR="$HOME/.local/share/raven"
 SOURCE_DIR=$(pwd)
 ICON_NAME="org.kde.raven.tiling"
 
-echo "🐦 Iniciando orquestación de Raven..."
+echo "🦅 Iniciando orquestación profesional de Raven..."
 
+# [0/8] Verificación de Dependencias Críticas
+command -v cargo >/dev/null 2>&1 || { echo >&2 "❌ Error: Rust/Cargo no detectado. Requerido para módulos nativos."; exit 1; }
+command -v kpackagetool6 >/dev/null 2>&1 || { echo >&2 "❌ Error: kpackagetool6 no detectado. ¿Estás en Plasma 6?"; exit 1; }
 
 if [ "$SOURCE_DIR" != "$TARGET_DIR" ]; then
     echo "[1/8] Desplegando en entorno protegido ($TARGET_DIR)..."
     mkdir -p "$TARGET_DIR"
-    rsync -a --exclude='.venv' --exclude='core/engine_rs/target' "$SOURCE_DIR/" "$TARGET_DIR/"
+    rsync -a --exclude='.venv' --exclude='target' --exclude='core/engine_rs/target' --exclude='adapters/kwin_rust_adapter/target' "$SOURCE_DIR/" "$TARGET_DIR/"
     cd "$TARGET_DIR" || exit
 else
     echo "[1/8] Ejecutando desde entorno protegido. Verificando actualizaciones..."
     if [ -d ".git" ]; then
-        git pull origin main || echo "⚠️ No se pudo sincronizar con el repositorio local. Manteniendo versión actual."
+        git pull origin main || echo "⚠️ Sincronización fallida. Manteniendo versión local."
     fi
 fi
 
@@ -27,15 +30,19 @@ if [ ! -d ".venv" ]; then
 fi
 source .venv/bin/activate
 
-echo "[3/8] Actualizando dependencias a estándares recientes..."
+echo "[3/8] Instalando dependencias y herramientas de compilación..."
 python -m pip install --upgrade pip
+pip install maturin
 pip install -r requirements.txt --upgrade
 
-echo "[4/8] Compilando motor geométrico nativo (Rust/PyO3)..."
+echo "[4/8] Compilando componentes Rust/PyO3..."
 export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
-cd core/engine_rs || exit
-maturin develop --release
-cd ../..
+
+echo "  > Compilando Motor Geométrico (core/engine_rs)..."
+maturin develop --release -m core/engine_rs/Cargo.toml
+
+echo "  > Compilando Adaptador DBus (adapters/kwin_rust_adapter)..."
+maturin develop --release -m adapters/kwin_rust_adapter/Cargo.toml
 
 echo "[5/8] Configurando integración gráfica (Iconos y Desktop Entry)..."
 mkdir -p ~/.local/share/icons/hicolor/scalable/apps/
@@ -55,18 +62,14 @@ Keywords=tiling;raven;kde;plasma;
 StartupNotify=true
 EOF
 
-echo "[6/8] Regenerando caché de iconos del sistema (kbuildsycoca6)..."
-gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor 2>/dev/null || true
+echo "[6/8] Regenerando caché de servicios de KDE..."
 kbuildsycoca6 --noincremental > /dev/null 2>&1
 
-echo "[7/8] Instalando/Actualizando adaptadores de KWin..."
-kpackagetool6 --type=KWin/Script --install adapters/kwin_script/ 2>/dev/null || \
-kpackagetool6 --type=KWin/Script --upgrade adapters/kwin_script/
+echo "[7/8] Instalando adaptadores de KWin y Plasmoids..."
+kpackagetool6 --type=KWin/Script -i adapters/kwin_script/ 2>/dev/null || kpackagetool6 --type=KWin/Script -u adapters/kwin_script/
+kpackagetool6 --type=Plasma/Applet -i adapters/plasmoid/ 2>/dev/null || kpackagetool6 --type=Plasma/Applet -u adapters/plasmoid/
 
-kpackagetool6 --type=Plasma/Applet --install adapters/plasmoid/ 2>/dev/null || \
-kpackagetool6 --type=Plasma/Applet --upgrade adapters/plasmoid/
-
-echo "[8/8] Registrando y reiniciando Daemon (Systemd)..."
+echo "[8/8] Configurando persistencia del Daemon (Systemd)..."
 mkdir -p ~/.config/systemd/user/
 cat <<EOF > ~/.config/systemd/user/raven.service
 [Unit]
@@ -78,18 +81,16 @@ ExecStart=$TARGET_DIR/.venv/bin/python $TARGET_DIR/main.py
 WorkingDirectory=$TARGET_DIR
 Restart=always
 RestartSec=5
-# Resiliencia contra inanición por TLP y ahorro de energía
+# Optimizaciones de rendimiento de grado empresarial
 CPUSchedulingPolicy=rr
 CPUSchedulingPriority=50
 OOMScoreAdjust=-200
-Slice=session.slice
 
 [Install]
 WantedBy=graphical-session.target
 EOF
 
 systemctl --user daemon-reload
-systemctl --user enable raven.service
-systemctl --user restart raven.service
+systemctl --user enable --now raven.service
 
-echo "✅ Orquestación finalizada con éxito. ¡Huélum!"
+echo "✅ Raven v1.5 instalado y operando. ¡Huélum!"

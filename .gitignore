@@ -1,20 +1,40 @@
-# Entornos Virtuales
+# === Rust/Maturin ===
+target/
+**/target/
+Cargo.lock
+
+# === Entornos Virtuales ===
 .venv/
 venv/
 env/
 
-# Cachés de Python
+# === Cachés y Compilados de Python ===
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+*.pyd
+.pytest_cache/
+.mypy_cache/
 
-# Archivos de Sistema Operativo
+# === Distribución y Empaquetado ===
+dist/
+build/
+*.egg-info/
+*.whl
+
+# === Archivos de Sistema Operativo ===
 .DS_Store
 Thumbs.db
+*.swp
+*~
 
-# Configuración de IDEs (VSCode, PyCharm)
+# === Configuración de IDEs ===
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
 
-# Archivos de empaquetado de KDE KWin
+# === KDE / KWin Specifics ===
 adapters/kwin_script/*.kpackagetool6
+adapters/plasmoid/*.plasmoid

@@ -1,44 +1,54 @@
 #!/bin/bash
-# Raven Tiling Emulator - Uninstaller
-# Autor: Alejandro González  Hernández (Vidruck)
+# Raven Tiling Emulator - Professional Uninstaller
+# Autor: Alejandro González Hernández (Vidruck)
 
-echo "🐦 Iniciando eliminación de Raven..."
+TARGET_DIR="$HOME/.local/share/raven"
+ICON_NAME="org.kde.raven.tiling"
+KWIN_SCRIPT_ID="org.kde.raven.bridge"
+PLASMOID_ID="org.kde.raven.toggle"
 
+echo "🐦 Iniciando desinstalación profesional de Raven..."
+
+echo "[1/6] Deteniendo y eliminando servicio Raven..."
 if systemctl --user is-active --quiet raven.service; then
-    echo "[1/5] Deteniendo servicio raven.service..."
     systemctl --user stop raven.service
 fi
 
 if [ -f "$HOME/.config/systemd/user/raven.service" ]; then
-    echo "[1/5] Deshabilitando y borrando unidad de servicio..."
     systemctl --user disable raven.service
     rm "$HOME/.config/systemd/user/raven.service"
     systemctl --user daemon-reload
     systemctl --user reset-failed
 fi
 
-if kpackagetool6 --type=KWin/Script --list | grep -q "org.kde.raven.bridge"; then
-    echo "[2/5] Desinstalando KWin Script (Raven Bridge)..."
-    kpackagetool6 --type=KWin/Script --remove org.kde.raven.bridge
+
+echo "[2/6] Eliminando adaptadores del entorno de escritorio..."
+if kpackagetool6 --type=KWin/Script --list | grep -q "$KWIN_SCRIPT_ID"; then
+    kpackagetool6 --type=KWin/Script --remove "$KWIN_SCRIPT_ID"
 fi
 
-echo "[3/5] Eliminando iconos y accesos directos..."
+if kpackagetool6 --type=Plasma/Applet --list | grep -q "$PLASMOID_ID"; then
+    kpackagetool6 --type=Plasma/Applet --remove "$PLASMOID_ID"
+fi
+
+echo "[3/6] Limpiando integración gráfica e iconos..."
 [ -f "$HOME/.local/share/applications/raven.desktop" ] && rm "$HOME/.local/share/applications/raven.desktop"
-[ -f "$HOME/.local/share/icons/hicolor/scalable/apps/org.kde.raven.tiling.svg" ] && rm "$HOME/.local/share/icons/hicolor/scalable/apps/raven.svg"
+[ -f "$HOME/.local/share/icons/hicolor/scalable/apps/${ICON_NAME}.svg" ] && rm "$HOME/.local/share/icons/hicolor/scalable/apps/${ICON_NAME}.svg"
 
-update-desktop-database ~/.local/share/applications/
+echo "[4/6] Actualizando bases de datos del sistema..."
+update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
+gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor 2>/dev/null || true
+kbuildsycoca6 --noincremental > /dev/null 2>&1
 
-if [ -d ".venv" ]; then
-    echo "[4/5] Eliminando entorno virtual de Python..."
-    rm -rf .venv/
+echo "[5/6] Eliminando archivos de despliegue y entornos..."
+if [ -d "$TARGET_DIR" ]; then
+    rm -rf "$TARGET_DIR"
 fi
 
-read -p "❓ ¿Deseas eliminar también los archivos de configuración JSON? (s/n): " confirm
+read -p "❓ ¿Deseas eliminar también los archivos de configuración y logs? (~/.config/raven) (s/n): " confirm
 if [[ $confirm == [sS] ]]; then
-    echo "[5/5] Borrando ~/.config/raven/..."
+    echo "Borrando ~/.config/raven/..."
     rm -rf "$HOME/.config/raven/"
 fi
-echo "Eliminando carpeta protegida..."
-rm -rf "$HOME/.local/share/raven"
 
-echo "✅ Raven ha sido eliminado de tu sistema. ¡Huélum!"
+echo "✅ Raven ha sido eliminado completamente del sistema. ¡Huélum!"

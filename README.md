@@ -5,42 +5,42 @@
 </p>
 
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)
 ![Qt](https://img.shields.io/badge/Qt-%23217346.svg?style=for-the-badge&logo=Qt&logoColor=white)
-![Arch Linux](https://img.shields.io/badge/Arch%20Linux-1793D1?style=for-the-badge&logo=arch-linux&logoColor=white)
 ![KDE](https://img.shields.io/badge/KDE%20Plasma-21D359?style=for-the-badge&logo=kde&logoColor=white)
 ![Wayland](https://img.shields.io/badge/Wayland-9999ff?style=for-the-badge&logo=wayland&logoColor=white)
 ![GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)
 
-Raven es un gestor de ventanas híbrido diseñado para **KDE Plasma 6 (Wayland)**. Combina la potencia de un motor matemático en Python con la integración nativa de KWin mediante una arquitectura de sincronización de estado atómico (*Snapshot-based Sync*).
+Raven es un gestor de ventanas dinámico diseñado para **KDE Plasma 6 (Wayland)**. La versión 1.5 marca la transición hacia una Arquitectura Híbrida de Alto Rendimiento, utilizando **Rust** para el procesamiento crítico de datos y **Python** para la orquestación de alto nivel.
 
+## 🚀 v1.5 Rust Hybrid Edition
+A partir de esta versión, Raven implementa una estrategia de "Strangler Fig" (Migración por Estrangulamiento) para mover componentes críticos de Python a Rust, buscando estándares de grado empresarial en eficiencia y estabilidad.
 
-## 🚀 Snapshot-Based Sync
-A diferencia de otros gestores como los basados en eventos diferenciales, Raven utiliza un modelo de **Consistencia Eventual Absoluta**. En cada cambio de composición, el puente de JavaScript captura una "fotografía" completa del estado de Wayland y la envía al demonio. Esto garantiza:
-- **Resiliencia:** El sistema se recupera instantáneamente de desconexiones de monitores (*Hotplugging*).
-- **Zero Jaloneo:** Gracias a filtros de interacción humana, las ventanas respetan el arrastre manual antes de ser absorbidas por el mosaico.
-- **Inmunidad a Tormentas por Apps:** Un regulador de flujo (*Throttler*) previene el colapso del bus de datos ante ráfagas de eventos de aplicaciones pesadas.
+- **Ultra-Performance Core (raven_core_rs):** El motor matemático de cálculo de geometría ha sido migrado a Rust. Ahora los algoritmos de partición Master-Stack se ejecutan de forma nativa, reduciendo la latencia de respuesta tras eventos de composición.
 
-## 🌟 Características Destacadas (v1.0)
-**Motor de Tiling Maestro-Apilado:** Algoritmo determinista $O(N)$ con control dinámico de ratio y cantidad de ventanas maestras.
-- **Gestión Inteligente de PiP (Picture-in-Picture):** Detección proactiva de ventanas flotantes de video.
-  - **Anclaje dinámico:** Ubicación configurable en los cuatro cuadrantes de la pantalla (Superior/Inferior - Izquierda/Derecha).
-  - **Margen de Aislamiento:** Implementa un Gap adicional de $6px$ sobre el margen base para mejorar la jerarquía visual.
-- **Raven Control Center:** Interfaz nativa en PyQt6 que actúa como un diálogo flotante centrado, evitando interferencias con el área de trabajo activa.
-- **Resiliencia:** 
-  - **Event Coalescing:** El Bridge de KWin agrupa ráfagas de eventos (común en apps Java/Firefox) antes de sincronizar el estado.
-  - **Trailing Edge Debouncing:** El Daemon utiliza tareas asíncronas cancelables para evitar recálculos redundantes.
+- **Zero-Stutter IPC Bridge (kwin_rust_adapter):** Se ha implementado un adaptador de infraestructura en Rust que utiliza Serde para la deserialización masiva del estado de KWin. Esto elimina el cuello de botella del Garbage Collector de Python al procesar JSONs masivos, garantizando una fluidez absoluta en el escritorio.
 
-## 🏗️ Estructura del Proyecto: Arquitectura Hexagonal
-- `core/`: Motor matemático puro. Lógica de partición Master-Stack e invariantes geométricas.
+- **Memoria y Energía:** Reducción drástica en el uso de recursos. El procesamiento de señales D-Bus ahora consume menos ciclos de CPU, optimizando la autonomía en dispositivos portátiles.
+
+## 🌟 Características Destacadas 
+- **Snapshot-Based Sync (Optimizado):** Captura atómica del estado de Wayland con procesamiento nativo en Rust.
+  - **Inmunidad a Tormentas:** El adaptador nativo filtra y procesa ráfagas de eventos de aplicaciones pesadas antes de que lleguen al motor lógico.
+- **Gestión Inteligente de PiP (Picture-in-Picture):** - Detección Proactiva: Identificación nativa de ventanas flotantes.
+  - **Anclaje Dinámico:** Ubicación configurable con un margen de aislamiento de **$8px$** para jerarquía visual.
+- **Raven Control Center:** Interfaz nativa en PyQt6 para la gestión de preferencias en tiempo real.
+
+## 🏗️ Estructura: Arquitectura Hexagonal Híbrida
+- `core/`: 
+  - `rust_engine/`: Motor matemático puro en Rust (Cálculo de invariantes).
+  - `tiling_engine.py/`: Orquestador de lógica de dominio y puente FFI.
 - `adapters/`: 
-    - **DBus Adapter:** Servidor IPC de alto rendimiento.
-    - **KWin Bridge:** Script nativo de Wayland para la manipulación de la composición.
-    - **Plasmoid:** Mini-widget de panel para control en tiempo real.
-- `gui/`: Centro de control nativo en PyQt6.
-
+    - `kwin_rust_adapter/`: Adaptador de infrastructura nativo para comunicación D-Bus de alta velocidad.
+    - `dbus_kwin.py`: Fachada asíncrona que implementa los puertos de comunicación.
+    - `kwin_script/`: Puente de JavaScript para la manipulación de la composición en KWin.
+- `gui/`: Centro de control nativo.
 ## 🛠️ Instalación y Uso
-El instalador cuenta con un mecanismo de gestión de entornos virtuales aislados y actualizado de dependencias inteligente compatible para distribuciones **Rolling Release.**
+El instalador cuenta con un mecanismo de gestión de entornos virtuales aislados de **Python** y compilación de los modulos nativos de **Rust**, además de contar con un actualizado de dependencias inteligente compatible para distribuciones **Rolling Release.**
 1. Clona el repositorio.
 2. Ejecuta `./install.sh`.
 3. Activa "Raven Bridge" en la configuración de KWin.
@@ -52,7 +52,7 @@ cd raven
 ```
 
 ## 🧹 Desinstalación
-Para eliminar completamente el proyecto ejecuta en terminal 
+Para eliminar completamente el proyecto ejecuta en terminal:
 
 `./uninstall.sh`. 
 
