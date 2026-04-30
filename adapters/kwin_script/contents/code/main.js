@@ -1,7 +1,7 @@
 /**
- * @fileoverview Raven Bridge for KDE Plasma 6 (Wayland).
- * Acts as an IPC client, capturing Wayland's composition state via KWin API
- * and forwarding it to the Raven Python Daemon.
+ * @fileoverview Raven Bridge para KDE Plasma 6 (Wayland).
+ * Actúa como un cliente IPC, capturando el estado de composición de Wayland mediante la API de KWin
+ * y enviándolo al demonio Python de Raven.
  * @author Alejandro González Hernández (Vidruck)
  */
 
@@ -23,10 +23,10 @@ function getWorkspaceId(window) {
 }
 
 /**
- * Strict heuristic filter to identify manageable top-level windows.
- * Excludes native popups, OSDs, panels, and specific KWin internal surfaces.
- * @param {object} w - The KWin window client object.
- * @returns {boolean} True if the window is a valid candidate for state tracking.
+ * Filtro heurístico estricto para identificar ventanas de nivel superior gestionables.
+ * Excluye popups nativos, OSDs, paneles y superficies internas específicas de KWin.
+ * @param {object} w - El objeto cliente de ventana de KWin.
+ * @returns {boolean} True si la ventana es candidata válida para el seguimiento de estado.
  */
 function isManageable(w) {
     if (!w || w.deleted) return false;
@@ -43,9 +43,9 @@ function isManageable(w) {
 }
 
 /**
- * Determines if a manageable window should bypass the tiling geometry (Float).
- * @param {object} w - The KWin window client object.
- * @returns {boolean} True if the window should float (e.g., PiP, utilities, VMs).
+ * Determina si una ventana gestionable debe omitir la geometría de mosaico (Flotar).
+ * @param {object} w - El objeto cliente de ventana de KWin.
+ * @returns {boolean} True si la ventana debe flotar (ej. PiP, utilidades, VMs).
  */
 function isFloating(w) {
     
@@ -73,50 +73,56 @@ function isFloating(w) {
 
 var _sync_timer = null;
 /**
- * Captures the current atomic state of all workspaces and windows.
- * Implements Event Coalescing to prevent DBus flooding.
+ * Recopila y envía el estado atómico de todas las ventanas y monitores al demonio de Raven.
+ * Implementa un mecanismo de "Event Coalescing" (Agrupación de Eventos) para evitar 
+ * la saturación del bus D-Bus durante cambios masivos de estado.
  */
 function sendFullState() {
-    if (_sync_timer) clearKWinTimeout(_sync_timer);
-    
+    if (_sync_timer){
+        return;
+    }
     _sync_timer = setKWinTimeout(function() {
+        _sync_timer = null;
         var windows = workspace.windowList();
-        var winState = [];
-        var screens = {};
-        
-        for (var i = 0; i < windows.length; i++) {
+        var winState=[];
+        var screens ={};
+        for (var i = 0; i <windows.length; i++){
             var w = windows[i];
-            if (!isManageable(w)) continue;
             
+            if (!isManageable(w)) continue;
             var wsId = getWorkspaceId(w);
             var output = w.output || workspace.activeOutput;
-            
-            if (output && !screens[wsId]) {
+
+            if(output && ! screens[wsId]){
                 var desktop = (w.desktops && w.desktops.length > 0) ? w.desktops[0] : workspace.currentDesktop;
                 var area = workspace.clientArea(0, output, desktop);
                 screens[wsId] = {
-                    x: Math.round(area.x), y: Math.round(area.y),
-                    w: Math.round(area.width), h: Math.round(area.height)
+                    x: Math.round(area.x),
+                    y: Math.round(area.y),
+                    w: Math.round(area.width),
+                    h: Math.round(area.height),
                 };
             }
-
             winState.push({
                 id: w.internalId.toString(),
                 ws: wsId,
-                f : isFloating(w),
-                m : Boolean(w.minimized),
-                p : (w.caption && w.caption.toLowerCase().indexOf("picture-in-picture") !== -1) || w.keepAbove
+               f : isFloating(w),
+               m: Boolean(w.minimized),
+               p : (w.caption && w.caption.toLowerCase().indexOf("picture-in-picture") !== -1) || w.keepAbove
             });
         }
-        
-        var payload = { windows: winState, screens: screens };
-        callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "syncState", JSON.stringify(payload));
-    }, 80); 
+        var payload = {windows: winState, screens: screens};
+        try{
+            callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "setState", JSON.stringify(payload));
+        }catch(e){
+            print("[Raven Bridge] D-bus Drop (Filtro de Seguridad Activo)" + e);
+        }
+    }, 100);
 }
 /**
- * Attaches event listeners to a specific window to track state mutations.
- * Implements logic to detect the end of interactive user drags (Drop).
- * @param {object} w - The KWin window client object.
+ * Conecta escuchadores de eventos a una ventana específica para rastrear mutaciones de estado.
+ * Implementa lógica para detectar el final de arrastres interactivos del usuario (Drop).
+ * @param {object} w - El objeto cliente de ventana de KWin.
  */
 function bindWindow(w) {
     if (!isManageable(w) || w.__raven_bound) return;
@@ -139,7 +145,8 @@ function bindWindow(w) {
 }
 
 /**
- * Entry point. Binds initial window states and registers global workspace hooks.
+ * Punto de entrada. Vincula los estados iniciales de las ventanas y registra ganchos (hooks) globales del espacio de trabajo.
+ * Implementa una lógica de centrado automático y dimensionamiento inicial (75% del área de trabajo) para nuevas ventanas.
  */
 function init() {
     print("[Raven Bridge] Snapshot Engine initialized.");
@@ -148,6 +155,17 @@ function init() {
 
     workspace.windowAdded.connect(function(w) {
         if (isManageable(w)) {
+            var output = w.output || workspace.activeOutput;
+            if (output){
+                var desktop = (w.desktops && w.desktops.length > 0)? w.desktops[0] : workspace.currentDesktop;
+                var area = workspace.clientArea(0, output, desktop);
+                var startW = Math.round(area.width * 0.75);
+                var startH = Math.round(area.height * 0.75);
+                var startX = Math.round(area.x + (area.width - startW)/2);
+                var startY = Math.round(area.y + (area.height - startH)/2);
+
+                w.frameGeometry = {x: startX, y: startY, width: startW, height: startH};    
+            };
             bindWindow(w);
             sendFullState();
         }
@@ -164,7 +182,7 @@ function init() {
 }
 
 /**
- * Parses and executes geometric or focus commands dispatched by the Python Daemon.
+ * Analiza y ejecuta comandos geométricos o de enfoque despachados por el demonio Python.
  */
 function applyCommands(commandsJson) {
     if (!commandsJson) return;
@@ -234,8 +252,8 @@ function clearKWinTimeout(timer) {
 }
 
 /**
- * Recursive asynchronous listener polling DBus for incoming commands.
- * Utiliza QTimer nativo para evitar cuelgues del motor KWin.
+ * Escuchador asíncrono recursivo que sondea DBus en busca de comandos entrantes.
+ * Utiliza QTimer nativo para evitar bloqueos del motor KWin.
  */
 function listenForCommands() {
     if (_is_listening) return;
