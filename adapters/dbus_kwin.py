@@ -9,13 +9,13 @@ estados masivos provenientes del compositor.
 
 import json
 import asyncio
+import kwin_rust_adapter
 from typing import List, Callable, Optional, Any, Dict, Coroutine
 
 from dbus_next.aio.message_bus import MessageBus
 from dbus_next.constants import BusType, NameFlag
 from dbus_next.service import ServiceInterface, method
 
-from adapters import kwin_rust_adapter
 from core.models import Rect, WindowNode, Workspace 
 from ports.display_server import DisplayServerPort
 from ports.event_listener import EventListenerPort
@@ -104,15 +104,13 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         self._on_window_created_cb: Optional[Callable[[str], Coroutine[Any, Any, None]]] = None
         self._on_window_closed_cb: Optional[Callable[[str], Coroutine[Any, Any, None]]] = None
         self._on_shortcut_pressed_cb: Optional[Callable[[str, Any], Coroutine[Any, Any, None]]] = None
-        
         self.known_windows: Dict[str, WindowNode] = {}
         self.command_queue: Optional[asyncio.Queue] = None 
         self.engine: Any = None 
-        
         self.active_window_id: Optional[str] = None
         self.workspaces: Dict[str, Workspace] = {}
-        
         self._debounce_task: Optional[asyncio.Task] = None
+        self._background_task: set= set()
 
     def _handle_sync_state(self, payload_json: str) -> None:
         """
@@ -124,6 +122,7 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         try:
             parse_data = kwin_rust_adapter.parse_sync_state(payload_json)
             if parse_data is None:
+                print(f"[ERROR IPC] Rust rechazó el JSON por violación de esquema (Schema Breach). Payload: {payload_json[:150]}...")
                 return
             screens_data, windows_data = parse_data
             
@@ -164,7 +163,9 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
     def _handle_shortcut(self, action: str, payload: Any) -> None:
         """Enruta los atajos de teclado recibidos por DBus hacia el motor lógico."""
         if self._on_shortcut_pressed_cb:
-            asyncio.create_task(self._on_shortcut_pressed_cb(action, payload))
+            task = asyncio.create_task(self._on_shortcut_pressed_cb(action, payload))
+            self._background_task.add(task)
+            task.add_done_callback(self._background_task.discard)
 
     async def connect(self) -> None:
         """Inicializa la conexión con el bus de sesión y registra el servicio org.kde.raven.Daemon."""
@@ -182,9 +183,8 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
         Obtiene y limpia la cola de comandos pendientes para enviarlos al script de KWin.
         Implementa un sondeo (polling) asíncrono para mantener la reactividad.
         """
-        if self.command_queue is None: 
+        if self.command_queue is None:
             return "[]"
-            
         commands = []
         try:
             primer_comando = await asyncio.wait_for(self.command_queue.get(), timeout=5.0)
@@ -192,7 +192,13 @@ class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
             while not self.command_queue.empty():
                 commands.append(self.command_queue.get_nowait())
         except asyncio.TimeoutError:
-            pass            
+            pass
+        except asyncio.CancelledError:
+            print("[WARNING] Sondeo D-Bus cancelado (Desconexión de kwin o reinio).")
+            return "[]"
+        except Exception as e:
+            print("[ERROR CRITICO] Fallo en la cola de comandos: {e}")
+        
         return json.dumps(commands)
 
     def on_window_created(self, callback: Callable[[str], Coroutine[Any, Any, None]]):

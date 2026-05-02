@@ -188,7 +188,12 @@ async def main():
     print("[INFO] Raven operando en segundo plano. Presiona Ctrl+C para salir.")
 
     try:
-        await asyncio.Future()
+        if kwin_adapter.bus:
+            await kwin_adapter.bus.wait_for_disconnect()
+            print("[INFO] Socket D-Bus cerrado abruptamente (Posible suspensión). Abortando para auto-recuperación...")
+            sys.exit(1)
+        else:
+            await asyncio.Future()
     except asyncio.CancelledError:
         print("[INFO] Ciclo principal cancelado por Systemd. Liberando recursos...")
     finally:

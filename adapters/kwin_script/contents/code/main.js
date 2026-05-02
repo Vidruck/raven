@@ -108,12 +108,12 @@ function sendFullState() {
                 ws: wsId,
                f : isFloating(w),
                m: Boolean(w.minimized),
-               p : (w.caption && w.caption.toLowerCase().indexOf("picture-in-picture") !== -1) || w.keepAbove
+               p: Boolean((w.caption && String(w.caption).toLowerCase().indexOf("picture-in-picture") !== -1) || w.keepAbove)
             });
         }
         var payload = {windows: winState, screens: screens};
         try{
-            callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "setState", JSON.stringify(payload));
+            callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "syncState", JSON.stringify(payload));
         }catch(e){
             print("[Raven Bridge] D-bus Drop (Filtro de Seguridad Activo)" + e);
         }
@@ -163,8 +163,12 @@ function init() {
                 var startH = Math.round(area.height * 0.75);
                 var startX = Math.round(area.x + (area.width - startW)/2);
                 var startY = Math.round(area.y + (area.height - startH)/2);
-
-                w.frameGeometry = {x: startX, y: startY, width: startW, height: startH};    
+                try {
+                    w.frameGeometry = {x: startX, y: startY, width: startW, height: startH};    
+                } catch(e) {
+                    print("[Raven Bridge] Advertencia QRect (Ignorada): " + e);
+                }
+                
             };
             bindWindow(w);
             sendFullState();
