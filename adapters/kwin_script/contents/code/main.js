@@ -156,7 +156,7 @@ function init() {
     workspace.windowAdded.connect(function(w) {
         if (isManageable(w)) {
             var output = w.output || workspace.activeOutput;
-            if (output){
+           if (!isFloating(w)){
                 var desktop = (w.desktops && w.desktops.length > 0)? w.desktops[0] : workspace.currentDesktop;
                 var area = workspace.clientArea(0, output, desktop);
                 var startW = Math.round(area.width * 0.75);
@@ -168,8 +168,7 @@ function init() {
                 } catch(e) {
                     print("[Raven Bridge] Advertencia QRect (Ignorada): " + e);
                 }
-                
-            };
+           }
             bindWindow(w);
             sendFullState();
         }
