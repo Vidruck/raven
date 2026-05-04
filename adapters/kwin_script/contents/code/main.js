@@ -104,6 +104,7 @@ function bindWindow(w) {
     
     w.frameGeometryChanged.connect(function() {
         if (w.__raven_mutating) return;
+        
         if (w.interactiveMove || w.interactiveResize) {
             w.__was_interacting = true;
             return;
@@ -111,38 +112,13 @@ function bindWindow(w) {
 
         if (w.__was_interacting && !w.interactiveMove && !w.interactiveResize) {
             w.__was_interacting = false;
-            
-            var cx = w.frameGeometry.x + Math.round(w.frameGeometry.width / 2);
-            var cy = w.frameGeometry.y + Math.round(w.frameGeometry.height / 2);
-            var targetId = null;
-            var windows = workspace.windowList();
-            
-            for (var i = 0; i < windows.length; i++) {
-                var cand = windows[i];
-                if (cand.internalId === w.internalId || !isManageable(cand) || isFloating(cand) || cand.minimized) continue;
-                
-                var r = cand.frameGeometry;
-                if (cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height) {
-                    targetId = cand.internalId.toString();
-                    break;
-                }
-            }
-
-            if (targetId) {
-                print("[Raven Bridge] Drag-to-Swap detectado: " + w.internalId.toString() + " <-> " + targetId);
-                try {
-                    callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "swapWindows", w.internalId.toString(), targetId);
-                } catch(e) {}
-            } else {
-                sendFullState();
-            }
+            sendFullState();
             return;
         }
 
         sendFullState();
     });
 }
-
 
 /**
  * Envía el estado completo de todas las ventanas gestionables y las geometrías de pantalla a Raven.

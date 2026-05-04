@@ -12,35 +12,35 @@
 ![Wayland](https://img.shields.io/badge/Wayland-9999ff?style=for-the-badge&logo=wayland&logoColor=white)
 ![GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)
 
-Raven es un gestor de ventanas dinámico diseñado para **KDE Plasma 6 (Wayland)**. La versión 1.5 marca la transición hacia una Arquitectura Híbrida de Alto Rendimiento, utilizando **Rust** para el procesamiento crítico de datos y **Python** para la orquestación de alto nivel.
+Raven es un gestor de ventanas dinámico diseñado para **KDE Plasma 6 (Wayland)**. La versión 1.6 consolida la migración hacia una **Arquitectura de Dominio Puro en Rust**, delegando la totalidad de la lógica de topología al motor nativo.
 
-## 🚀 v1.5 Rust Hybrid Edition
-A partir de esta versión, Raven implementa una estrategia de "Strangler Fig" (Migración por Estrangulamiento) para mover componentes críticos de Python a Rust, buscando estándares de grado empresarial en eficiencia y estabilidad.
+## 🚀 v1.6: Topología Global Nativa (Native Global Topology)
+Esta versión representa la culminación de la estrategia "Strangler Fig", donde los componentes críticos han "estrangulado" completamente las implementaciones antiguas en Python.
 
-- **Ultra-Performance Core (raven_core_rs):** El motor matemático de cálculo de geometría ha sido migrado a Rust. Ahora los algoritmos de partición Master-Stack se ejecutan de forma nativa, reduciendo la latencia de respuesta tras eventos de composición.
+- **Migración 100% Rust-Native:** A diferencia de la v1.5, donde Rust solo manejaba el cálculo matemático básico, la v1.6 delega la **Topología Global** completa. Esto incluye la gestión de múltiples escritorios (workspaces), la lógica de Picture-in-Picture (PiP) y la organización jerárquica de ventanas.
+  
+- **Patrón Fachada (Facade Pattern):** El `TilingEngine` en Python ha sido refactorizado para actuar únicamente como una interfaz de alto nivel (Fachada). Ya no contiene lógica de cálculo; su única responsabilidad es orquestar los datos entre el sistema D-Bus y el motor `raven_core_rs`.
 
-- **Zero-Stutter IPC Bridge (kwin_rust_adapter):** Se ha implementado un adaptador de infraestructura en Rust que utiliza Serde para la deserialización masiva del estado de KWin. Esto elimina el cuello de botella del Garbage Collector de Python al procesar JSONs masivos, garantizando una fluidez absoluta en el escritorio.
-
-- **Memoria y Energía:** Reducción drástica en el uso de recursos. El procesamiento de señales D-Bus ahora consume menos ciclos de CPU, optimizando la autonomía en dispositivos portátiles.
+- **Cero Latencia en Multi-Escritorio:** Al procesar todos los workspaces en una sola llamada atómica a Rust, se eliminan los saltos de contexto (context switching) entre lenguajes para cada escritorio, resultando en una disposición instantánea incluso en configuraciones complejas de múltiples monitores.
 
 ## 🌟 Características Destacadas 
-- **Snapshot-Based Sync (Optimizado):** Captura atómica del estado de Wayland con procesamiento nativo en Rust.
-  - **Inmunidad a Tormentas:** El adaptador nativo filtra y procesa ráfagas de eventos de aplicaciones pesadas antes de que lleguen al motor lógico.
-- **Gestión Inteligente de PiP (Picture-in-Picture):** - Detección Proactiva: Identificación nativa de ventanas flotantes.
-  - **Anclaje Dinámico:** Ubicación configurable con un margen de aislamiento de **$8px$** para jerarquía visual.
-- **Raven Control Center:** Interfaz nativa en PyQt6 para la gestión de preferencias en tiempo real.
+- **Global Topology Engine:** Cálculo unificado de todos los estados del escritorio en una única operación nativa.
+- **Detección PiP Avanzada:** Identificación y anclaje dinámico de ventanas Picture-in-Picture gestionado directamente por el kernel de Rust.
+- **Inmunidad a Tormentas de Eventos:** El puente Rust filtra ráfagas de señales D-Bus, garantizando que el motor solo procese estados estables.
+- **Raven Control Center:** Interfaz nativa en PyQt6 para la gestión de preferencias y visualización del estado del motor.
 
 ## 🏗️ Estructura: Arquitectura Hexagonal Híbrida
 - `core/`: 
-  - `rust_engine/`: Motor matemático puro en Rust (Cálculo de invariantes).
-  - `tiling_engine.py/`: Orquestador de lógica de dominio y puente FFI.
+  - `engine_rs/`: Kernel de lógica pura en Rust. Implementa los algoritmos Master-Stack y Topología Global.
+  - `tiling_engine.py`: Fachada de orquestación y puente FFI (Foreign Function Interface).
 - `adapters/`: 
-    - `kwin_rust_adapter/`: Adaptador de infrastructura nativo para comunicación D-Bus de alta velocidad.
-    - `dbus_kwin.py`: Fachada asíncrona que implementa los puertos de comunicación.
-    - `kwin_script/`: Puente de JavaScript para la manipulación de la composición en KWin.
-- `gui/`: Centro de control nativo.
+    - `kwin_rust_adapter/`: Adaptador de infraestructura nativo para comunicación D-Bus de ultra-alta velocidad.
+    - `dbus_kwin.py`: Capa de comunicación asíncrona con el compositor KWin.
+    - `kwin_script/`: Bridge de JavaScript que interactúa con la API de composición de Plasma 6.
+- `gui/`: Centro de control y configuración nativo.
+
 ## 🛠️ Instalación y Uso
-El instalador cuenta con un mecanismo de gestión de entornos virtuales aislados de **Python** y compilación de los modulos nativos de **Rust**, además de contar con un actualizado de dependencias inteligente compatible para distribuciones **Rolling Release.**
+El instalador gestiona automáticamente los entornos virtuales de **Python** y la compilación de los módulos nativos de **Rust**.
 1. Clona el repositorio.
 2. Ejecuta `./install.sh`.
 3. Activa "Raven Bridge" en la configuración de KWin.
@@ -52,10 +52,8 @@ cd raven
 ```
 
 ## 🧹 Desinstalación
-Para eliminar completamente el proyecto ejecuta en terminal:
-
-`./uninstall.sh`. 
-
+Para eliminar completamente el proyecto ejecuta:
+`./uninstall.sh`
 
 ### Atajos Predeterminados
 | Tecla | Acción |
@@ -76,7 +74,6 @@ Este es un proyecto de investigación académica y desarrollo personal. Al ser s
 ---
 **Si te gusta este proyecto, te pido que me ayudes a mejorarlo; así me ayudas a ser un mejor programador.**
 
-*Este proyecto se distribuye bajo la licencia GPL-3. Se permite su libre uso, estudio, modificación y redistribución, siempre que se preserve la autoría original y cualquier obra derivada se libere bajo estos mismos términos de código abierto.*
-
+*Este proyecto se distribuye bajo la licencia GPL-3. Se permite su libre uso, estudio, modificación y redistribución, siempre que se preserve la autoría original.*
 
 *Desarrollado por Alejandro González Hernández (Vidruck).*

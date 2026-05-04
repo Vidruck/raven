@@ -90,12 +90,6 @@ class RavenEventsDBusService(ServiceInterface):
         if self.adapter.engine is not None:
             return self.adapter.engine.is_tiling_enabled
         return True
-    @method(name="swapWindows")
-    def swapWindows(self, window_a_id: 's', window_b_id: 's'): # type: ignore
-        """Recibe la señal de intercambio táctil (Drag-to-Swap) desde KWin."""
-        payload = {"window_a": window_a_id, "window_b": window_b_id}
-        self.adapter._handle_shortcut("swap_windows", payload)
-
 
 class KWinDBusAdapter(DisplayServerPort, EventListenerPort):
     """

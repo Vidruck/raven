@@ -92,4 +92,4 @@ EOF
 systemctl --user daemon-reload
 systemctl --user enable --now raven.service
 
-echo "✅ Raven v1.5 instalado y operando. ¡Huélum!"
+echo "✅ Raven v1.6 instalado y operando. ¡Huélum!"

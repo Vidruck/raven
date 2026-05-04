@@ -12,8 +12,12 @@ PlasmoidItem {
     property bool isEngineEnabled: true
     property string queryCmd: "dbus-send --session --print-reply=literal --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.getTilingState"
 
+    function execDbus(method) {
+        executable.exec("dbus-send --session --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events." + method)
+    }
+
     function toggleRaven() {
-        executable.exec("dbus-send --session --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.toggleTiling")
+        execDbus("toggleTiling")
         root.isEngineEnabled = !root.isEngineEnabled;
     }
 
@@ -46,29 +50,92 @@ PlasmoidItem {
     }
 
     fullRepresentation: Item {
-        implicitWidth: 220
-        implicitHeight: 120
+        implicitWidth: 320
+        implicitHeight: 280
 
         ColumnLayout {
             anchors.centerIn: parent
-            spacing: 15
+            anchors.margins: 10
+            spacing: 12
 
             PlasmaComponents.Label {
-                text: "Raven Tiling Engine"
+                text: "Raven Control Center"
                 font.bold: true
-                font.pixelSize: 14
+                font.pixelSize: 15
                 Layout.alignment: Qt.AlignHCenter
             }
 
             PlasmaComponents.CheckBox {
                 id: tilingToggle
-                text: "Mosaico Activado"
-                
+                text: "Mosaico Dinámico Activo"
                 checked: root.isEngineEnabled
                 Layout.alignment: Qt.AlignHCenter
-                
                 onClicked: {
                     root.toggleRaven()
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: PlasmaComponents.Theme.textColor
+                opacity: 0.15
+            }
+
+            GridLayout {
+                columns: 2
+                rowSpacing: 10
+                columnSpacing: 10
+                Layout.alignment: Qt.AlignHCenter
+                Layout.fillWidth: true
+
+                PlasmaComponents.Button {
+                    text: "◄ Foco Anterior"
+                    icon.name: "go-previous"
+                    Layout.fillWidth: true
+                    onClicked: root.execDbus("focusPrev")
+                }
+                PlasmaComponents.Button {
+                    text: "Foco Siguiente ►"
+                    icon.name: "go-next"
+                    Layout.fillWidth: true
+                    onClicked: root.execDbus("focusNext")
+                }
+                PlasmaComponents.Button {
+                    text: "+ Ventana Maestra"
+                    icon.name: "list-add"
+                    Layout.fillWidth: true
+                    onClicked: root.execDbus("incrementMaster")
+                }
+                PlasmaComponents.Button {
+                    text: "- Ventana Maestra"
+                    icon.name: "list-remove"
+                    Layout.fillWidth: true
+                    onClicked: root.execDbus("decrementMaster")
+                }
+                PlasmaComponents.Button {
+                    text: "+ Ratio Maestro"
+                    icon.name: "view-split-left-right"
+                    Layout.fillWidth: true
+                    onClicked: root.execDbus("increaseRatio")
+                }
+                PlasmaComponents.Button {
+                    text: "- Ratio Maestro"
+                    icon.name: "view-split-left-right"
+                    Layout.fillWidth: true
+                    onClicked: root.execDbus("decreaseRatio")
+                }
+                PlasmaComponents.Button {
+                    text: "+ Márgenes"
+                    icon.name: "zoom-in"
+                    Layout.fillWidth: true
+                    onClicked: executable.exec("dbus-send --session --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.incrementGaps int32:2")
+                }
+                PlasmaComponents.Button {
+                    text: "- Márgenes"
+                    icon.name: "zoom-out"
+                    Layout.fillWidth: true
+                    onClicked: executable.exec("dbus-send --session --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.incrementGaps int32:-2")
                 }
             }
         }
