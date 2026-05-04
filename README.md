@@ -26,7 +26,8 @@ Esta versión representa la culminación de la estrategia "Strangler Fig", donde
 ## 🌟 Características Destacadas 
 - **Global Topology Engine:** Cálculo unificado de todos los estados del escritorio en una única operación nativa.
 - **Detección PiP Avanzada:** Identificación y anclaje dinámico de ventanas Picture-in-Picture gestionado directamente por el kernel de Rust.
-- **Inmunidad a Tormentas de Eventos:** El puente Rust filtra ráfagas de señales D-Bus, garantizando que el motor solo procese estados estables.
+- **Zero-Copy D-Bus IPC:** Se ha eliminado el middleware nativo intermedio (`adapters_rust`), simplificando la arquitectura. Ahora Python captura el payload de D-Bus e inyecta la cadena en bruto al motor Rust, reduciendo la latencia de serialización drásticamente y mejorando la mantenibilidad.
+- **Inmunidad a Tormentas de Eventos:** El puente de integración filtra ráfagas de señales D-Bus, garantizando que el motor solo procese estados estables.
 - **Raven Control Center:** Interfaz nativa en PyQt6 para la gestión de preferencias y visualización del estado del motor.
 
 ## 🏗️ Estructura: Arquitectura Hexagonal Híbrida
@@ -34,8 +35,7 @@ Esta versión representa la culminación de la estrategia "Strangler Fig", donde
   - `engine_rs/`: Kernel de lógica pura en Rust. Implementa los algoritmos Master-Stack y Topología Global.
   - `tiling_engine.py`: Fachada de orquestación y puente FFI (Foreign Function Interface).
 - `adapters/`: 
-    - `kwin_rust_adapter/`: Adaptador de infraestructura nativo para comunicación D-Bus de ultra-alta velocidad.
-    - `dbus_kwin.py`: Capa de comunicación asíncrona con el compositor KWin.
+    - `dbus_kwin.py`: Capa de comunicación asíncrona con el compositor KWin. Operando mediante IPC D-Bus de baja latencia con un enfoque Zero-Copy, delegando el análisis del estado estructural directamente a Rust sin consumir recursos en Python.
     - `kwin_script/`: Bridge de JavaScript que interactúa con la API de composición de Plasma 6.
 - `gui/`: Centro de control y configuración nativo.
 

@@ -40,9 +40,6 @@ export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
 echo "  > Compilando Motor Geométrico (core/engine_rs)..."
 maturin develop --release -m core/engine_rs/Cargo.toml
 
-echo "  > Compilando Adaptador DBus (adapters/kwin_rust_adapter)..."
-maturin develop --release -m adapters/kwin_rust_adapter/Cargo.toml
-
 echo "[5/8] Configurando integración gráfica (Iconos y Desktop Entry)..."
 mkdir -p ~/.local/share/icons/hicolor/scalable/apps/
 cp icon/${ICON_NAME}.svg ~/.local/share/icons/hicolor/scalable/apps/${ICON_NAME}.svg

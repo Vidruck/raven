@@ -1,6 +1,5 @@
 [workspace]
 members = [
     "core/engine_rs",
-    "adapters/kwin_rust_adapter"
 ]
-resolver = "2"
+resolver = "1"
