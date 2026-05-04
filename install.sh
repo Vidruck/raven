@@ -6,9 +6,8 @@ TARGET_DIR="$HOME/.local/share/raven"
 SOURCE_DIR=$(pwd)
 ICON_NAME="org.kde.raven.tiling"
 
-echo "🦅 Iniciando orquestación profesional de Raven..."
+echo "🐦 Iniciando orquestación de Raven..."
 
-# [0/8] Verificación de Dependencias Críticas
 command -v cargo >/dev/null 2>&1 || { echo >&2 "❌ Error: Rust/Cargo no detectado. Requerido para módulos nativos."; exit 1; }
 command -v kpackagetool6 >/dev/null 2>&1 || { echo >&2 "❌ Error: kpackagetool6 no detectado. ¿Estás en Plasma 6?"; exit 1; }
 

@@ -114,6 +114,10 @@ class RavenController:
             
         elif action == "decrease_ratio":
             self.engine.config.master_ratio = max(0.1, self.engine.config.master_ratio - 0.05)
+        elif action == "swap_windows":
+            win_a = payload.get("window_a")
+            win_b = payload.get("window_b")
+            print(f"[CORE] Ejecutando Topological Swap: {win_a} <-> {win_b}")
         elif action in ["focus_next", "focus_prev"]:
             windows = await self.display.get_all_windows()
 
