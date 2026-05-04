@@ -1,10 +1,20 @@
 /**
  * @fileoverview Raven Bridge para KDE Plasma 6 (Wayland).
- * Actúa como un cliente IPC, capturando el estado de composición de Wayland mediante la API de KWin
- * y enviándolo al demonio Python de Raven.
+ * 
+ * Este script actúa como un puente (bridge) entre el gestor de composición KWin y el daemon 
+ * de Raven. Su función principal es capturar eventos de ventanas y cambios en la composición,
+ * sincronizando el estado mediante D-Bus para permitir el manejo del tiling (mosaico) desde 
+ * el motor externo en Python/Rust.
+ * 
  * @author Alejandro González Hernández (Vidruck)
  */
 
+/**
+ * Genera un identificador único para el espacio de trabajo actual basado en el monitor y el escritorio virtual.
+ * 
+ * @param {KWin.Window} window La ventana de la cual se desea obtener el ID del workspace.
+ * @returns {string} Un string con el formato "NombreMonitor||IDEscritorio".
+ */
 function getWorkspaceId(window) {
     var output = window.output || workspace.activeOutput;
     var outName = output ? output.name : "default";
@@ -17,6 +27,15 @@ function getWorkspaceId(window) {
     }
     return outName + "||" + desktopId;
 }
+
+/**
+ * Determina si una ventana es candidata para ser gestionada por el motor de tiling de Raven.
+ * Filtra ventanas especiales como paneles, tooltips, notificaciones y diálogos de sistema específicos.
+ * 
+ * @param {KWin.Window} w La ventana a evaluar.
+ * @returns {boolean} True si la ventana es gestionable, False en caso contrario.
+ */
+
 function isManageable(w) {
     if (!w || w.deleted) return false;
     if (w.popupWindow || w.tooltip || w.onScreenDisplay || w.notification) return false;
@@ -29,6 +48,15 @@ function isManageable(w) {
 
     return true;
 }
+
+/**
+ * Evalúa si una ventana debe ser tratada como flotante (floating) o si debe entrar al layout de mosaico.
+ * Considera tipos de ventana, estados de maximización y clases de recursos específicas (ej. Picture-in-Picture).
+ * 
+ * @param {KWin.Window} w La ventana a evaluar.
+ * @returns {boolean} True si la ventana es flotante, False si es apta para tiling.
+ */
+
 
 function isFloating(w) {
     if (w.dialog || w.utility || w.specialWindow || w.modal || w.transientFor) return true;
@@ -56,6 +84,14 @@ function isFloating(w) {
 }
 
 var _sync_timer = null;
+
+/**
+ * Conecta los eventos de cambio de una ventana a la lógica de sincronización de Raven.
+ * Gestiona cambios de estado (minimizado, geometría, clase) y detecta interacciones de intercambio (drag-to-swap).
+ * 
+ * @param {KWin.Window} w La ventana a vincular.
+ */
+
 function bindWindow(w) {
     if (!isManageable(w) || w.__raven_bound) return;
     w.__raven_bound = true;
@@ -108,6 +144,10 @@ function bindWindow(w) {
 }
 
 
+/**
+ * Envía el estado completo de todas las ventanas gestionables y las geometrías de pantalla a Raven.
+ * Implementa un mecanismo de debouncing (32ms) para evitar saturar el bus de D-Bus durante cambios rápidos.
+ */
 function sendFullState() {
     if (_sync_timer) {
         return;
@@ -150,10 +190,14 @@ function sendFullState() {
         } catch (e) {
             print("[Raven Bridge] D-bus Drop (Filtro de Seguridad Activo)" + e);
         }
-    }, 16); 
+    }, 32); 
 }
 
 
+/**
+ * Inicializa el motor de captura de Raven Bridge.
+ * Configura los escuchas globales de workspace y vincula las ventanas existentes.
+ */
 function init() {
     print("[Raven Bridge] Snapshot Engine initialized.");
     var initialWindows = workspace.windowList();
@@ -176,6 +220,12 @@ function init() {
     listenForCommands();
 }
 
+/**
+ * Procesa y aplica una lista de comandos recibidos desde el daemon de Raven.
+ * Soporta acciones de movimiento (move), enfoque (focus) y peticiones de sincronización forzada.
+ * 
+ * @param {string} commandsJson String JSON que contiene el arreglo de comandos a ejecutar.
+ */
 function applyCommands(commandsJson) {
     if (!commandsJson) return;
     var cmds = JSON.parse(commandsJson);
@@ -202,7 +252,7 @@ function applyCommands(commandsJson) {
                         return function() {
                             if (win) win.__raven_mutating = false;
                         };
-                    })(windows[j]), 50);
+                    })(windows[j]), 32);
 
                     break;
                 }
@@ -225,6 +275,16 @@ function applyCommands(commandsJson) {
 var _is_listening = false;
 var _watchdog_timer = null;
 
+/**
+ * Crea un temporizador único (SingleShot) utilizando la API de QTimer de Qt.
+ * Esencial para operaciones asíncronas dentro del contexto de KWin.
+ * 
+ * @param {function} callback Función a ejecutar cuando el tiempo expire.
+ * @param {number} ms Tiempo de espera en milisegundos.
+ * @returns {QTimer} Instancia del temporizador creado.
+ */
+
+
 function setKWinTimeout(callback, ms) {
     var timer = new QTimer();
     timer.interval = ms;
@@ -234,12 +294,21 @@ function setKWinTimeout(callback, ms) {
     return timer;
 }
 
+/**
+ * Detiene un temporizador activo de forma segura.
+ * 
+ * @param {QTimer} timer La instancia del temporizador a detener.
+ */
 function clearKWinTimeout(timer) {
     if (timer) {
         timer.stop();
     }
 }
 
+/**
+ * Mantiene un bucle persistente de comunicación con Raven vía D-Bus.
+ * Solicita comandos pendientes y gestiona un Watchdog para evitar bloqueos en la comunicación IPC.
+ */
 function listenForCommands() {
     if (_is_listening) return;
     _is_listening = true;
