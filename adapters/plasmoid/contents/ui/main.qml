@@ -54,7 +54,7 @@ PlasmoidItem {
             anchors.fill: parent
             anchors.margins: Kirigami.Units.smallSpacing
             source: "org.kde.raven.tiling"
-            activeState: root.isEngineEnabled
+            active: root.isEngineEnabled
             opacity: root.isEngineEnabled ? 1.0 : 0.4
             
             Behavior on opacity { OpacityAnimator { duration: Kirigami.Units.longDuration } }
