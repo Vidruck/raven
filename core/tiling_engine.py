@@ -3,8 +3,8 @@ Motor de Mosaico (Tiling Engine) de Raven.
 Implementa el Patrón Fachada con Arquitectura Zero-Copy hacia Rust.
 """
 from typing import Dict
-from core.models import Rect
-from core.config import RavenConfig
+from raven_core_rs import Rect, WindowNode, Workspace
+from raven_core_rs import RavenConfig
 import raven_core_rs as rust_engine
 
 class TilingEngine:

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict
-from core.models import Rect, WindowNode, Workspace
+from raven_core_rs import Rect, WindowNode, Workspace
 
 class DisplayServerPort(ABC):
     """

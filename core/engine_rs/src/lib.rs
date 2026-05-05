@@ -10,7 +10,7 @@ mod config;
 
 use config::RavenConfig;
 
-use geometry::Rect;
+use geometry::{Rect, WindowNode, Workspace};
 
 /// Representa una pantalla o monitor de KWin con sus dimensiones y coordenadas físicas.
 #[derive(Debug, Deserialize)]
@@ -77,6 +77,8 @@ fn compute_layout_from_json(
 #[pymodule]
 fn raven_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Rect>()?;
+    m.add_class::<WindowNode>()?;
+    m.add_class::<Workspace>()?;
     m.add_class::<RavenConfig>()?;
     m.add_function(wrap_pyfunction!(compute_layout_from_json,m)?)?;
     Ok(())

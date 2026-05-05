@@ -55,3 +55,19 @@ impl WindowNode {
         WindowNode { window_id, workspace_id, is_floating, is_minimized, is_pip }
     }
 }
+
+#[pyclass(module = "raven_core_rs", get_all, set_all)]
+#[derive(Clone, Debug)]
+pub struct Workspace {
+    pub id: String,
+    pub rect: Rect,
+}
+
+#[pymethods]
+impl Workspace {
+    /// Crea una nueva instancia de Workspace.
+    #[new]
+    pub fn new(id: String, rect: Rect) -> Self {
+        Workspace { id, rect }
+    }
+}

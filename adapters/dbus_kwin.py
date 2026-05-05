@@ -15,7 +15,7 @@ from dbus_next.aio.message_bus import MessageBus
 from dbus_next.constants import BusType, NameFlag
 from dbus_next.service import ServiceInterface, method
 
-from core.models import Rect, WindowNode, Workspace 
+from raven_core_rs import Rect, WindowNode, Workspace
 from ports.display_server import DisplayServerPort
 from ports.event_listener import EventListenerPort
 
