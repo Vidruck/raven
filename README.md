@@ -1,79 +1,75 @@
 # Raven Tiling Emulator 🐦
 
+
 <p align="center">
   <img src="icon/org.kde.raven.tiling.svg" width="250" alt="Raven Logo">
 </p>
 
-![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)
-![Qt](https://img.shields.io/badge/Qt-%23217346.svg?style=for-the-badge&logo=Qt&logoColor=white)
 ![KDE](https://img.shields.io/badge/KDE%20Plasma-21D359?style=for-the-badge&logo=kde&logoColor=white)
 ![Wayland](https://img.shields.io/badge/Wayland-9999ff?style=for-the-badge&logo=wayland&logoColor=white)
 ![GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)
 
-Raven es un gestor de ventanas dinámico diseñado para **KDE Plasma 6 (Wayland)**. La versión 1.6 consolida la migración hacia una **Arquitectura de Dominio Puro en Rust**, delegando la totalidad de la lógica de topología al motor nativo.
+Raven es un gestor de ventanas dinámico (Tiling Window Manager) diseñado específicamente para **KDE Plasma 6 (Wayland)**. Con la llegada de la **versión 2.0**, Raven alcanza su madurez tecnológica al convertirse en una solución **100% nativa en Rust**, eliminando por completo la capa de dependencia de Python tanto en el motor como en la interfaz de usuario.
 
-## 🚀 v1.6: Topología Global Nativa (Native Global Topology)
-Esta versión representa la culminación de la estrategia "Strangler Fig", donde los componentes críticos han "estrangulado" completamente las implementaciones antiguas en Python.
+## 🚀 El Salto a la Versión 2.0: Cambio de Paradigma
+Esta versión culmina el ciclo de transición de arquitectura híbrida (Python + Rust FFI) a un ecosistema puramente binario y nativo. El resultado es un gestor extremadamente rápido, ligero y estable que se integra de forma invisible en el sistema.
 
-- **Migración 100% Rust-Native:** A diferencia de la v1.5, donde Rust solo manejaba el cálculo matemático básico, la v1.6 delega la **Topología Global** completa. Esto incluye la gestión de múltiples escritorios (workspaces), la lógica de Picture-in-Picture (PiP) y la organización jerárquica de ventanas.
-  
-- **Patrón Fachada (Facade Pattern):** El `TilingEngine` en Python ha sido refactorizado para actuar únicamente como una interfaz de alto nivel (Fachada). Ya no contiene lógica de cálculo; su única responsabilidad es orquestar los datos entre el sistema D-Bus y el motor `raven_core_rs`.
+### 📉 Eficiencia Energética y de Memoria
+La optimización ha sido el pilar de esta actualización. Al eliminar el intérprete de Python y las envolturas FFI, hemos reducido el consumo de recursos de manera drástica:
 
-- **Cero Latencia en Multi-Escritorio:** Al procesar todos los workspaces en una sola llamada atómica a Rust, se eliminan los saltos de contexto (context switching) entre lenguajes para cada escritorio, resultando en una disposición instantánea incluso en configuraciones complejas de múltiples monitores.
+| Versión | Arquitectura | Consumo de RAM (aprox.) |
+|---|---|---|
+| **v1.0** | Python Puro | 55.0 MB |
+| **v1.6** | Híbrida (Python + Rust FFI) | ~25.9 MB |
+| **v2.0** | **Native All-Rust Edition** | **~6.0 MB** |
 
-## 🌟 Características Destacadas 
-- **Global Topology Engine:** Cálculo unificado de todos los estados del escritorio en una única operación nativa.
-- **Detección PiP Avanzada:** Identificación y anclaje dinámico de ventanas Picture-in-Picture gestionado directamente por el kernel de Rust.
-- **Zero-Copy D-Bus IPC:** Se ha eliminado el middleware nativo intermedio (`adapters_rust`), simplificando la arquitectura. Ahora Python captura el payload de D-Bus e inyecta la cadena en bruto al motor Rust, reduciendo la latencia de serialización drásticamente y mejorando la mantenibilidad.
-- **Inmunidad a Tormentas de Eventos:** El puente de integración filtra ráfagas de señales D-Bus, garantizando que el motor solo procese estados estables.
-- **Raven Control Center:** Interfaz nativa en PyQt6 para la gestión de preferencias y visualización del estado del motor.
+*Una reducción del **89%** en el uso de memoria comparado con la primera versión.*
 
-## 🏗️ Estructura: Arquitectura Hexagonal Híbrida
-- `core/`: 
-  - `engine_rs/`: Kernel de lógica pura en Rust. Implementa los algoritmos Master-Stack y Topología Global.
-  - `tiling_engine.py`: Fachada de orquestación y puente FFI (Foreign Function Interface).
+## 🌟 Nuevas Funciones y Mejoras
+- **Motor de Topología Global Nativo:** El daemon (`raven_core`) procesa ahora todos los eventos del bus D-Bus de forma directa y asíncrona mediante `zbus`, eliminando cualquier cuello de botella.
+- **Raven Control Center (Renovado):** Una nueva interfaz de configuración moderna y minimalista construida íntegramente en Rust con **egui/eframe**. Sigue automáticamente el esquema de colores (Oscuro/Claro) del sistema y consume una fracción de los recursos que su predecesora.
+- **Compilación sobre Metal:** El motor se compila optimizando específicamente para la arquitectura de tu procesador local durante la instalación, garantizando latencias sub-milisegundo en los cálculos de geometría.
+- **Gestión PiP Avanzada:** La lógica de Picture-in-Picture ha sido refinada para ser más intuitiva y configurable desde la nueva interfaz.
+
+## 🏗️ Nueva Estructura del Proyecto
+- `core/engine_rs/`: El corazón del proyecto. Un daemon nativo asíncrono que escucha al compositor KWin.
+- `raven_gui/`: Aplicación de preferencias nativa basada en egui para una configuración visual fluida.
 - `adapters/`: 
-    - `dbus_kwin.py`: Capa de comunicación asíncrona con el compositor KWin. Operando mediante IPC D-Bus de baja latencia con un enfoque Zero-Copy, delegando el análisis del estado estructural directamente a Rust sin consumir recursos en Python.
-    - `kwin_script/`: Bridge de JavaScript que interactúa con la API de composición de Plasma 6.
-- `gui/`: Centro de control y configuración nativo.
+    - `kwin_script/`: Bridge liviano en JavaScript para la API de Plasma 6.
+    - `plasmoid/`: Widget de Plasma para el control rápido del estado del motor.
+- `bin/`: Directorio de destino para los binarios optimizados una vez instalados.
 
 ## 🛠️ Instalación y Uso
-El instalador gestiona automáticamente los entornos virtuales de **Python** y la compilación de los módulos nativos de **Rust**.
+El nuevo instalador gestiona la descarga de crates de Rust y la compilación optimizada de los componentes nativos.
+
 1. Clona el repositorio.
 2. Ejecuta `./install.sh`.
-3. Activa "Raven Bridge" en la configuración de KWin.
+3. Activa "Raven Bridge" en la configuración de KWin (Scripts de KWin).
 
-``` Bash
+```bash
 git clone https://github.com/Vidruck/raven
 cd raven
 ./install.sh
 ```
 
 ## 🧹 Desinstalación
-Para eliminar completamente el proyecto ejecuta:
+Si deseas eliminar Raven y todos sus binarios, ejecuta:
 `./uninstall.sh`
 
 ### Atajos Predeterminados
 | Tecla | Acción |
 |---|---|
 | `Meta + I / D` | Incrementar/Disminuir ventanas maestras |
-| `Meta + L / H` | Ajustar ratio del área maestra |
-| `Meta + J / K` | Cambiar foco entre ventanas |
+| `Meta + L / H` | Ajustar ratio del área maestra (Ancho) |
+| `Meta + J / K` | Cambiar foco entre ventanas del stack |
+| `Meta + G` | Alternar (Toggle) el motor de mosaico globalmente |
 
 ## ⚠️ Descargo de Responsabilidad (Disclaimer)
-
-**Este software se proporciona "tal cual" (AS IS), sin garantía de ningún tipo.** Dado que Raven interactúa directamente con el compositor de ventanas (KWin) y el bus de datos del sistema (DBus), el usuario asume toda la responsabilidad derivada de su uso. El autor no se hace responsable de:
-- Inestabilidad del entorno de escritorio o fallos en la sesión gráfica.
-- Conflictos con otros scripts de KWin o configuraciones del sistema.
-- Cualquier daño indirecto, pérdida de datos o comportamiento imprevisto del hardware.
-
-Este es un proyecto de investigación académica y desarrollo personal. Al ser software experimental, se recomienda su uso bajo supervisión y conocimiento de las herramientas de recuperación de KWin/Wayland.
+**Este software se proporciona "tal cual" (AS IS), sin garantía de ningún tipo.** Raven interactúa directamente con el compositor de ventanas (KWin) y el bus de datos del sistema (DBus). El usuario asume toda la responsabilidad derivada de su uso. El autor no se hace responsable de inestabilidades en la sesión gráfica o conflictos con otros scripts del sistema.
 
 ---
-**Si te gusta este proyecto, te pido que me ayudes a mejorarlo; así me ayudas a ser un mejor programador.**
+**Si este proyecto te es útil, considera ayudarme a mejorarlo con feedback o contribuciones. ¡Huélum!**
 
-*Este proyecto se distribuye bajo la licencia GPL-3. Se permite su libre uso, estudio, modificación y redistribución, siempre que se preserve la autoría original.*
-
-*Desarrollado por Alejandro González Hernández (Vidruck).*
+*Desarrollado por Alejandro González Hernández (Vidruck). Licencia GPL-3.*

@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "core/engine_rs",
+    "raven_gui"
 ]
 resolver = "1"

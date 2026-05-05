@@ -1,49 +1,37 @@
 # Contribuyendo a Raven 🐦
 
-¡Gracias por el interés en mejorar Raven! Este proyecto ha evolucionado hacia un modelo híbrido **Python-Rust**. Estamos encantados de recibir colaboraciones que impulsen la estabilidad, el rendimiento y la eficiencia energética en KDE Plasma 6.
+¡Gracias por el interés en mejorar Raven! Con el lanzamiento de la **v2.0**, el proyecto ha evolucionado hacia un ecosistema **100% nativo en Rust**. Estamos encantados de recibir colaboraciones que impulsen la estabilidad, el rendimiento y la eficiencia energética en KDE Plasma 6.
 
-## 🏗️ Filosofía de Diseño v1.5
-Para mantener la robustez lograda, todas las contribuciones deben respetar estos pilares arquitectónicos:
+## 🏗️ Filosofía de Diseño v2.0
+Para mantener la robustez y ligereza logradas, todas las contribuciones deben respetar estos pilares arquitectónicos:
 
-1. **Arquitectura Hexagonal Híbrida:**
+1. **Ecosistema Nativo en Rust:**
+   - **Core Asíncrono (core/engine_rs):** Toda la lógica de cálculo y la comunicación IPC reside en Rust. Utilizamos `zbus` para una integración asíncrona y de ultra-baja latencia con el bus de datos del sistema.
+   - **Interfaz Nativa (raven_gui):** La UI se construye con `egui/eframe`, garantizando un consumo mínimo de recursos y una integración fluida con el compositor.
 
-- **Core Puro (core/engine_rs):** La lógica matemática pesada reside en Rust. El motor debe permanecer determinista y libre de efectos secundarios.
+2. **Snapshot-Based Synchronization:**
+   - Mantenemos el modelo de **Consistencia Eventual.** El Bridge (JS) envía el estado estructural que el daemon de Rust procesa de forma atómica para generar los comandos de posicionamiento.
 
-- **Adaptadores Nativos (adapters/kwin_rust_adapter):** Las tareas de infraestructura crítica (DBus, Serialización masiva) deben implementarse en Rust para garantizar latencia sub-milisegundo.
-
-- **Orquestación en Python:** Python actúa como el "Pegamento" (Glue Code) asíncrono para la lógica de alto nivel y la interfaz de usuario.
-
-2. **Snapshot-Based Synchronization (Rust Accelerated):**
-
-- Mantenemos el modelo de **Consistencia Eventual Absoluta.**
-
-- Cualquier Snapshot enviado desde el Bridge (JS) debe ser procesado por el adaptador de Rust mediante serde antes de llegar al dominio de Python.
-
-3. **Seguridad y Rendimiento:**
-
-- Se debe evitar el uso de unsafe en Rust a menos que sea estrictamente necesario para la interoperabilidad con la C-API de Python (PyO3).
-
-- Cualquier nueva función nativa debe incluir un archivo de tipado Stub (.pyi) para mantener la integridad del análisis estático en Python.
+3. **Seguridad y Rendimiento Extremo:**
+   - **Cero Costo:** Buscamos abstracciones de costo cero. Evita clonaciones innecesarias de datos en el motor.
+   - **Rust Idiomático:** Favorecemos el uso de tipos seguros y el manejo de errores robusto (Result/Option). El uso de `unsafe` está estrictamente prohibido a menos que se justifique por interoperabilidad crítica con APIs de bajo nivel del sistema.
 
 ## 🚀 Cómo colaborar
-1. **Reporte de Bugs:** Si encuentras un "jaloneo" o un comportamiento extraño en Wayland, abre un *Issue* describiendo tu hardware y versión de Plasma.
-2. **Pull Requests:** - Crea una rama descriptiva (`feature/nueva-mejora` o `fix/error-especifico`).
-   - Asegúrate de que tu código pase un linter de Python (flake8 o black).
-   - Documenta cualquier cambio en la firma de los métodos DBus.
+1. **Reporte de Bugs:** Si encuentras un comportamiento extraño en Wayland, abre un *Issue* describiendo tu hardware, versión de Plasma y adjunta los logs del daemon si es posible (`journalctl --user -u raven`).
+2. **Pull Requests:**
+   - Crea una rama descriptiva (`feature/nueva-mejora` o `fix/error-especifico`).
+   - Asegúrate de que tu código pase las pruebas de sanidad: `cargo check` y `cargo clippy`.
+   - Documenta cualquier cambio en la interfaz DBus o en la estructura de configuración.
+
 ## 🛠️ Requisitos de Desarrollo *(Stack)*
 Para compilación y pruebas necesitas:
-- **Rust Toolchain:** Edicion 2021.
-- **Python 3.10+**: Recomiendo 3.14
-- **Maturin:** Para gestionar los bindings nativos.
-### Para enviar un PR:**
-1. Crea una rama descriptiva (`feature/` ó `fix/`).
-2. Si modificas el **core** o **adapter**, asegura funcionamiento  y verifica que no haya regresiones de rendimiento.
-3. Documenta cualquier cambio en la interfaz de los modulos nativos en los archivos `.pyi`correspondientes.
+- **Rust Toolchain:** Edición 2021 o superior.
+- **Librerías de Desarrollo:** `libwayland`, `libx11`, `libxkbcommon` (requeridas por la interfaz gráfica).
+- **Herramientas de KDE:** `kpackagetool6` y `kbuildsycoca6` para probar los adaptadores.
 
 ## 📝 Estándares de Código
-- **Rust:** Fromateo estricto con `cargo fmt`. Los módulos deben compilarse con àbi3`para garantizar compatibilidad con Python.
-- **Python:** Seguimos PEP 8 y tipos estrictos *(Strict Type Hinting)*. Es obligatorio el uso de `Coroutine` en firmas de métodos asíncronos.
-- **JavaScript (KWin):** El código debe ser compatible con el motor QJSEngine de Plasma 6 y evitar el uso de APIs obsoletas de X11.
+- **Rust:** Formateo obligatorio con `cargo fmt`. Se recomienda encarecidamente seguir las sugerencias de `clippy` para un código más limpio y eficiente. Documenta las funciones públicas utilizando comentarios de documentación (`///`).
+- **JavaScript (KWin):** El código del bridge debe ser compatible con el motor QJSEngine de Plasma 6 y evitar el uso de APIs obsoletas de X11 siempre que sea posible.
 
 ---
 

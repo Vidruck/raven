@@ -2,147 +2,201 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import org.kde.plasma.plasmoid
+import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasma5support as Plasma5Support 
 import org.kde.plasma.components as PlasmaComponents
 
 PlasmoidItem {
     id: root
-    preferredRepresentation: Plasmoid.compactRepresentation
-
-    // Estado local para reflejar si el motor de Tiling está activo o pausado.
+    
     property bool isEngineEnabled: true
-    // Comando para consultar por D-Bus el estado actual del motor de Tiling.
     property string queryCmd: "dbus-send --session --print-reply=literal --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.getTilingState"
 
-    // Función auxiliar para ejecutar llamadas D-Bus de manera asíncrona hacia el demonio de Raven.
-    function execDbus(method) {
-        executable.exec("dbus-send --session --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events." + method)
+    // --- Lógica de Comunicación ---
+    function execDbus(method, args) {
+        let cmd = "dbus-send --session --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events." + method;
+        if (args) { cmd += " " + args; }
+        executable.exec(cmd);
     }
 
-    // Activa o desactiva la disposición automática de ventanas e invierte el estado local.
     function toggleRaven() {
-        execDbus("toggleTiling")
+        execDbus("toggleTiling", "");
         root.isEngineEnabled = !root.isEngineEnabled;
     }
 
-    // Dispara la consulta al daemon para obtener el estado real del motor.
-    function queryState() {
-        executable.exec(queryCmd)
-    }
+    function queryState() { executable.exec(queryCmd); }
 
     onExpandedChanged: {
-        if (expanded) {
-            queryState();
-        }
+        if (expanded) { queryState(); }
     }
 
-    // Integración con Plasma5Support para la ejecución de comandos del sistema operativo (DataSource).
     Plasma5Support.DataSource {
         id: executable
         engine: "executable"
         connectedSources: []
         onNewData: (sourceName, data) => {
             if (sourceName === root.queryCmd && data["stdout"] !== undefined) {
-                var output = data["stdout"].trim();
-                if (output.indexOf("true") !== -1) {
-                    root.isEngineEnabled = true;
-                } else if (output.indexOf("false") !== -1) {
-                    root.isEngineEnabled = false;
-                }
+                let output = data["stdout"].trim().toLowerCase();
+                root.isEngineEnabled = output.includes("true");
             }
-            disconnectSource(sourceName)
+            disconnectSource(sourceName);
         }
-        function exec(cmd) { connectSource(cmd) }
+        function exec(cmd) { connectSource(cmd); }
     }
 
-    fullRepresentation: Item {
-        implicitWidth: 420
-        implicitHeight: 380
+    // --- Representación Compacta (Icono en el panel) ---
+    compactRepresentation: MouseArea {
+        id: compactRoot
+        activeFocusOnTab: true
+        onClicked: root.expanded = !root.expanded
+        
+        Kirigami.Icon {
+            anchors.fill: parent
+            anchors.margins: Kirigami.Units.smallSpacing
+            source: "org.kde.raven.tiling"
+            activeState: root.isEngineEnabled
+            opacity: root.isEngineEnabled ? 1.0 : 0.4
+            
+            Behavior on opacity { OpacityAnimator { duration: Kirigami.Units.longDuration } }
+        }
+        
+        PlasmaComponents.ToolTip {
+            text: "Raven Tiling: " + (root.isEngineEnabled ? "Activo" : "Inactivo")
+        }
+    }
+
+    // --- Representación Extendida (Popup) ---
+    fullRepresentation: Kirigami.Page {
+        implicitWidth: Kirigami.Units.gridUnit * 18
+        implicitHeight: Kirigami.Units.gridUnit * 20
+        
+        background: null // Usar fondo transparente del tema de Plasma
 
         ColumnLayout {
-            anchors.centerIn: parent
-            anchors.margins: 10
-            spacing: 12
+            anchors.fill: parent
+            anchors.margins: Kirigami.Units.largeSpacing
+            spacing: Kirigami.Units.largeSpacing
 
-            PlasmaComponents.Label {
-                text: "Raven Control Center"
-                font.bold: true
-                font.pixelSize: 15
-                Layout.alignment: Qt.AlignHCenter
-            }
+            // Encabezado Premium
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.mediumSpacing
 
-            PlasmaComponents.CheckBox {
-                id: tilingToggle
-                text: "Mosaico Dinámico Activo"
-                checked: root.isEngineEnabled
-                Layout.alignment: Qt.AlignHCenter
-                onClicked: {
-                    root.toggleRaven()
+                Kirigami.Icon {
+                    source: "org.kde.raven.tiling"
+                    implicitWidth: Kirigami.Units.iconSizes.medium
+                    implicitHeight: Kirigami.Units.iconSizes.medium
+                }
+
+                ColumnLayout {
+                    spacing: 0
+                    PlasmaComponents.Label {
+                        text: "Raven Engine"
+                        font.bold: true
+                        font.pixelSize: Kirigami.Units.gridUnit * 0.9
+                    }
+                    PlasmaComponents.Label {
+                        text: "v2.0 Native Rust"
+                        opacity: 0.6
+                        font.pixelSize: Kirigami.Units.gridUnit * 0.7
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                PlasmaComponents.Switch {
+                    checked: root.isEngineEnabled
+                    onClicked: root.toggleRaven()
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                height: 1
-                color: PlasmaComponents.Theme.textColor
-                opacity: 0.15
+            Kirigami.Separator { Layout.fillWidth: true }
+
+            // Sección de Control de Foco y Layout
+            Kirigami.Heading {
+                text: "Gestión de Ventanas"
+                level: 4
+                opacity: 0.8
             }
 
             GridLayout {
                 columns: 2
-                rowSpacing: 10
-                columnSpacing: 10
-                Layout.alignment: Qt.AlignHCenter
                 Layout.fillWidth: true
+                rowSpacing: Kirigami.Units.smallSpacing
+                columnSpacing: Kirigami.Units.smallSpacing
 
                 PlasmaComponents.Button {
                     text: "Foco Anterior"
                     icon.name: "go-previous"
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("focusPrev")
+                    onClicked: root.execDbus("focusPrev", "")
                 }
                 PlasmaComponents.Button {
                     text: "Foco Siguiente"
                     icon.name: "go-next"
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("focusNext")
+                    onClicked: root.execDbus("focusNext", "")
                 }
                 PlasmaComponents.Button {
-                    text: "Ventana Maestra"
+                    text: "Añadir Maestra"
                     icon.name: "list-add"
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("incrementMaster")
+                    onClicked: root.execDbus("incrementMaster", "")
                 }
                 PlasmaComponents.Button {
-                    text: "Ventana Maestra"
+                    text: "Quitar Maestra"
                     icon.name: "list-remove"
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("decrementMaster")
+                    onClicked: root.execDbus("decrementMaster", "")
                 }
+            }
+
+            // Sección de Dimensiones
+            Kirigami.Heading {
+                text: "Ajustes de Espacio"
+                level: 4
+                opacity: 0.8
+            }
+
+            GridLayout {
+                columns: 2
+                Layout.fillWidth: true
+                rowSpacing: Kirigami.Units.smallSpacing
+                columnSpacing: Kirigami.Units.smallSpacing
+
                 PlasmaComponents.Button {
-                    text: " + Ratio Maestro"
+                    text: "Expandir Ratio"
                     icon.name: "view-split-left-right"
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("increaseRatio")
+                    onClicked: root.execDbus("increaseRatio", "")
                 }
                 PlasmaComponents.Button {
-                    text: " - Ratio Maestro"
+                    text: "Reducir Ratio"
                     icon.name: "view-split-left-right"
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("decreaseRatio")
+                    onClicked: root.execDbus("decreaseRatio", "")
                 }
                 PlasmaComponents.Button {
-                    text: "Márgenes"
+                    text: "Más Gaps"
                     icon.name: "zoom-in"
                     Layout.fillWidth: true
-                    onClicked: executable.exec("dbus-send --session --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.incrementGaps int32:2")
+                    onClicked: root.execDbus("incrementGaps", "int32:2")
                 }
                 PlasmaComponents.Button {
-                    text: "Márgenes"
+                    text: "Menos Gaps"
                     icon.name: "zoom-out"
                     Layout.fillWidth: true
-                    onClicked: executable.exec("dbus-send --session --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.incrementGaps int32:-2")
+                    onClicked: root.execDbus("incrementGaps", "int32:-2")
                 }
+            }
+
+            Item { Layout.fillHeight: true } // Espaciador final
+            
+            PlasmaComponents.Label {
+                text: "© 2026 Vidruck"
+                Layout.alignment: Qt.AlignHCenter
+                opacity: 0.4
+                font.pixelSize: Kirigami.Units.gridUnit * 0.6
             }
         }
     }

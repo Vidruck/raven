@@ -1,5 +1,5 @@
 #!/bin/bash
-# Raven Tiling Emulator - Smart Installer & Updater Rust FFI Edition
+# Raven Tiling Emulator - Native Rust Orchestrator
 # Autor: Alejandro González Hernández (Vidruck)
 
 TARGET_DIR="$HOME/.local/share/raven"
@@ -8,39 +8,36 @@ ICON_NAME="org.kde.raven.tiling"
 
 echo "🐦 Iniciando orquestación de Raven..."
 
-command -v cargo >/dev/null 2>&1 || { echo >&2 "❌ Error: Rust/Cargo no detectado. Requerido para módulos nativos."; exit 1; }
+# Verificaciones de sanidad
+command -v cargo >/dev/null 2>&1 || { echo >&2 "❌ Error: Rust/Cargo no detectado. Requerido para la compilación nativa."; exit 1; }
 command -v kpackagetool6 >/dev/null 2>&1 || { echo >&2 "❌ Error: kpackagetool6 no detectado. ¿Estás en Plasma 6?"; exit 1; }
 
+# [1/7] Despliegue de código y sincronización
 if [ "$SOURCE_DIR" != "$TARGET_DIR" ]; then
-    echo "[1/8] Desplegando en entorno protegido ($TARGET_DIR)..."
+    echo "[1/7] Desplegando en entorno de ejecución ($TARGET_DIR)..."
     mkdir -p "$TARGET_DIR"
-    rsync -a --exclude='.venv' --exclude='target' --exclude='core/engine_rs/target' --exclude='adapters/kwin_rust_adapter/target' "$SOURCE_DIR/" "$TARGET_DIR/"
+    rsync -a --exclude='target' --exclude='.git' --exclude='.venv' "$SOURCE_DIR/" "$TARGET_DIR/"
     cd "$TARGET_DIR" || exit
 else
-    echo "[1/8] Ejecutando desde entorno protegido. Verificando actualizaciones..."
+    echo "[1/7] Ejecutando desde directorio de destino. Verificando actualizaciones..."
     if [ -d ".git" ]; then
         git pull origin main || echo "⚠️ Sincronización fallida. Manteniendo versión local."
     fi
 fi
 
-echo "[2/8] Preparando entorno virtual aislado..."
-if [ ! -d ".venv" ]; then
-    python -m venv .venv
-fi
-source .venv/bin/activate
+# [2/7] Compilación de Alto Rendimiento
+echo "[2/7] Compilando componentes nativos (Release)..."
+# Optimizamos para la arquitectura del procesador local
+export RUSTFLAGS="-C target-cpu=native"
+cargo build --release --workspace
 
-echo "[3/8] Instalando dependencias y herramientas de compilación..."
-python -m pip install --upgrade pip
-pip install maturin
-pip install -r requirements.txt --upgrade
+# Asegurar persistencia de binarios
+mkdir -p "$TARGET_DIR/bin"
+cp target/release/raven_core "$TARGET_DIR/bin/"
+cp target/release/raven_gui "$TARGET_DIR/bin/"
 
-echo "[4/8] Compilando componentes Rust/PyO3..."
-export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
-
-echo "  > Compilando Motor Geométrico (core/engine_rs)..."
-maturin develop --release -m core/engine_rs/Cargo.toml
-
-echo "[5/8] Configurando integración gráfica (Iconos y Desktop Entry)..."
+# [3/7] Integración con el Entorno de Escritorio
+echo "[3/7] Configurando iconos y lanzador de aplicaciones..."
 mkdir -p ~/.local/share/icons/hicolor/scalable/apps/
 cp icon/${ICON_NAME}.svg ~/.local/share/icons/hicolor/scalable/apps/${ICON_NAME}.svg
 
@@ -49,8 +46,9 @@ cat <<EOF > ~/.local/share/applications/raven.desktop
 Version=1.0
 Type=Application
 Name=Raven Control Center
-GenericName=Tiling Window Manager Config
-Exec=$TARGET_DIR/.venv/bin/python $TARGET_DIR/gui/preferences.py
+GenericName=Gestor de Mosaico (Preferencias)
+Comment=Configura el comportamiento del motor nativo Raven
+Exec=$TARGET_DIR/bin/raven_gui
 Icon=${ICON_NAME}
 Terminal=false
 Categories=Settings;DesktopSettings;
@@ -58,26 +56,29 @@ Keywords=tiling;raven;kde;plasma;
 StartupNotify=true
 EOF
 
-echo "[6/8] Regenerando caché de servicios de KDE..."
+# [4/7] Sincronización de Servicios KDE
+echo "[4/7] Regenerando caché de servicios de KDE..."
 kbuildsycoca6 --noincremental > /dev/null 2>&1
 
-echo "[7/8] Instalando adaptadores de KWin y Plasmoids..."
+# [5/7] Instalación de Extensiones KWin
+echo "[5/7] Instalando adaptadores de KWin y Plasmoids..."
 kpackagetool6 --type=KWin/Script -i adapters/kwin_script/ 2>/dev/null || kpackagetool6 --type=KWin/Script -u adapters/kwin_script/
 kpackagetool6 --type=Plasma/Applet -i adapters/plasmoid/ 2>/dev/null || kpackagetool6 --type=Plasma/Applet -u adapters/plasmoid/
 
-echo "[8/8] Configurando persistencia del Daemon (Systemd)..."
+# [6/7] Automatización del Daemon (Systemd)
+echo "[6/7] Configurando servicio nativo systemd..."
 mkdir -p ~/.config/systemd/user/
 cat <<EOF > ~/.config/systemd/user/raven.service
 [Unit]
-Description=Raven Tiling Emulator Daemon
+Description=Raven Tiling Emulator Daemon (Native Rust)
 After=graphical-session.target
 
 [Service]
-ExecStart=$TARGET_DIR/.venv/bin/python $TARGET_DIR/main.py
+ExecStart=$TARGET_DIR/bin/raven_core
 WorkingDirectory=$TARGET_DIR
 Restart=always
-RestartSec=5
-# Optimizaciones de rendimiento de grado empresarial
+RestartSec=3
+# Optimizaciones de prioridad para el motor de tiling
 CPUSchedulingPolicy=rr
 CPUSchedulingPriority=50
 OOMScoreAdjust=-200
@@ -86,7 +87,9 @@ OOMScoreAdjust=-200
 WantedBy=graphical-session.target
 EOF
 
+# [7/7] Activación del Ecosistema
+echo "[7/7] Reiniciando servicios de Raven..."
 systemctl --user daemon-reload
 systemctl --user enable --now raven.service
 
-echo "✅ Raven v1.6 instalado y operando. ¡Huélum!"
+echo "✅ Raven v2.0 (Native Rust) instalado y operando con éxito. ¡Huélum!"

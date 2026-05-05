@@ -1,4 +1,4 @@
-use pyo3::prelude::*;
+
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -8,7 +8,6 @@ use std::path::PathBuf;
 /// 
 /// Contiene parámetros ajustables para el comportamiento del tiling, gaps,
 /// y configuraciones de ventanas flotantes (PiP).
-#[pyclass(module = "raven_core_rs", get_all, set_all)]
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RavenConfig {
     /// Espacio (gaps) por defecto entre ventanas en píxeles.
@@ -23,13 +22,11 @@ pub struct RavenConfig {
     pub pip_position: String,
 }
 
-#[pymethods]
 impl RavenConfig {
     /// Crea una nueva instancia de `RavenConfig` con valores predeterminados.
     /// 
     /// # Retorno
     /// Una instancia de `RavenConfig` con la configuración base.
-    #[new]
     pub fn new() -> Self {
         RavenConfig {
             default_gaps: 8,
@@ -47,7 +44,6 @@ impl RavenConfig {
     /// 
     /// # Retorno
     /// La configuración cargada o los valores por defecto en caso de fallo.
-    #[staticmethod]
     pub fn load() -> Self {
         let home = env::var("HOME").unwrap_or_else(|_| String::from("~"));
         let mut path = PathBuf::from(home);

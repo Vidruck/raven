@@ -3,13 +3,12 @@
 //! Este submódulo define las estructuras de datos fundamentales utilizadas por el motor
 //! para representar dimensiones de pantalla y propiedades de las ventanas.
 
-use pyo3::prelude::*;
+
 
 /// Representa un rectángulo en el espacio 2D de la pantalla.
 ///
 /// Se utiliza para definir tanto el área total de la pantalla como el área
 /// asignada a cada ventana después de calcular el layout.
-#[pyclass(module = "raven_core_rs", get_all, set_all)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
     /// Posición en el eje X (horizontal).
@@ -22,17 +21,14 @@ pub struct Rect {
     pub height: i32,
 }
 
-#[pymethods]
 impl Rect {
     /// Crea una nueva instancia de Rect.
-    #[new]
     pub fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
         Rect { x, y, width, height }
     }
 }
 
 /// Representa una ventana y sus propiedades de estado dentro del motor.
-#[pyclass(module = "raven_core_rs", get_all, set_all)]
 #[derive(Clone, Debug)]
 pub struct WindowNode {
     /// Identificador único de la ventana (usualmente el WID de X11 o KWin).
@@ -47,26 +43,26 @@ pub struct WindowNode {
     pub is_pip: bool,
 }
 
-#[pymethods]
 impl WindowNode {
     /// Crea una nueva instancia de WindowNode con sus propiedades iniciales.
-    #[new]
     pub fn new(window_id: String, workspace_id: String, is_floating: bool, is_minimized: bool, is_pip: bool) -> Self {
         WindowNode { window_id, workspace_id, is_floating, is_minimized, is_pip }
     }
 }
 
-#[pyclass(module = "raven_core_rs", get_all, set_all)]
+/// Representa un escritorio o espacio de trabajo virtual.
+/// 
+/// Vincula un identificador único con un área rectangular específica en la pantalla.
 #[derive(Clone, Debug)]
 pub struct Workspace {
+    /// Identificador único del escritorio (proporcionado por KWin).
     pub id: String,
+    /// Área física disponible en este escritorio.
     pub rect: Rect,
 }
 
-#[pymethods]
 impl Workspace {
     /// Crea una nueva instancia de Workspace.
-    #[new]
     pub fn new(id: String, rect: Rect) -> Self {
         Workspace { id, rect }
     }
