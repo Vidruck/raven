@@ -6,6 +6,9 @@ use serde::Deserialize;
 
 mod geometry;
 mod layout;
+mod config;
+
+use config::RavenConfig;
 
 use geometry::Rect;
 
@@ -74,6 +77,7 @@ fn compute_layout_from_json(
 #[pymodule]
 fn raven_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Rect>()?;
-    m.add_function(wrap_pyfunction!(compute_layout_from_json, m)?)?;
+    m.add_class::<RavenConfig>()?;
+    m.add_function(wrap_pyfunction!(compute_layout_from_json,m)?)?;
     Ok(())
 }

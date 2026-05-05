@@ -6,7 +6,7 @@ from typing import Any
 
 from core.tiling_engine import TilingEngine
 from adapters.dbus_kwin import KWinDBusAdapter
-from adapters.config_loader import ConfigLoader
+from raven_core_rs import RavenConfig
 from ports.display_server import DisplayServerPort
 from ports.event_listener import EventListenerPort
 
@@ -118,8 +118,7 @@ async def main():
             task.cancel()        
     loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
 
-    loader = ConfigLoader()
-    app_config = loader.load()
+    app_config = RavenConfig.load()
 
     engine = TilingEngine(config=app_config)
     kwin_adapter = KWinDBusAdapter()

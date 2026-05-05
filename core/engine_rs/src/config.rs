@@ -1,0 +1,70 @@
+use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+
+/// Estructura que define la configuración del gestor de ventanas Raven.
+/// 
+/// Contiene parámetros ajustables para el comportamiento del tiling, gaps,
+/// y configuraciones de ventanas flotantes (PiP).
+#[pyclass(module = "raven_core_rs", get_all, set_all)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RavenConfig {
+    /// Espacio (gaps) por defecto entre ventanas en píxeles.
+    pub default_gaps: i32,
+    /// Indica si el tiling debe estar habilitado automáticamente al iniciar.
+    pub tiling_enabled_on_startup: bool,
+    /// Número de ventanas principales (master) en el layout.
+    pub nmaster: usize,
+    /// Proporción del área ocupada por las ventanas principales (0.0 a 1.0).
+    pub master_ratio: f32,
+    /// Posición por defecto para ventanas Picture-in-Picture.
+    pub pip_position: String,
+}
+
+#[pymethods]
+impl RavenConfig {
+    /// Crea una nueva instancia de `RavenConfig` con valores predeterminados.
+    /// 
+    /// # Retorno
+    /// Una instancia de `RavenConfig` con la configuración base.
+    #[new]
+    pub fn new() -> Self {
+        RavenConfig {
+            default_gaps: 8,
+            tiling_enabled_on_startup: true,
+            nmaster: 1,
+            master_ratio: 0.5,
+            pip_position: String::from("Bottom-right"),
+        }
+    }
+
+    /// Carga la configuración desde el archivo JSON en el sistema de archivos.
+    /// 
+    /// Busca el archivo en `~/.config/raven/raven.json`. Si no existe o hay
+    /// un error en el formato, retorna la configuración por defecto.
+    /// 
+    /// # Retorno
+    /// La configuración cargada o los valores por defecto en caso de fallo.
+    #[staticmethod]
+    pub fn load() -> Self {
+        let home = env::var("HOME").unwrap_or_else(|_| String::from("~"));
+        let mut path = PathBuf::from(home);
+        path.push(".config");
+        path.push("raven");
+        path.push("raven.json");
+
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(config) = serde_json::from_str::<RavenConfig>(&content) {
+                println!("[RUST_CONFIG] Preferencias cargadas con éxito desde disco.");
+                return config;
+            } else {
+                println!("[RUST_CONFIG] Error de formato JSON. Usando Fallback nativo.");
+            }
+        } else {
+            println!("[RUST_CONFIG] No se encontró archivo de configuración. Usando Fallback nativo.");
+        }
+        RavenConfig::new()
+    }
+}
