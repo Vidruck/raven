@@ -4,7 +4,7 @@ import signal
 import json
 from typing import Any
 
-from core.tiling_engine import TilingEngine
+from raven_core_rs import TilingEngine
 from adapters.dbus_kwin import KWinDBusAdapter
 from raven_core_rs import RavenConfig
 from ports.display_server import DisplayServerPort
