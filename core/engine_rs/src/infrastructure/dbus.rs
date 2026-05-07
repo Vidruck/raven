@@ -2,6 +2,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use zbus::interface;
 use serde::Serialize;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::application::controller::RavenController;
 
@@ -54,13 +56,27 @@ impl RavenDBusService {
     /// en las ventanas (creación, cierre, movimiento manual).
     #[zbus(name = "syncState")]
     async fn sync_state(&self, payload_json: String) {
-        *self.last_payload_json.lock().await = payload_json.clone();
-        
-        let mut ctrl = self.controller.lock().await;
-        if let Ok(commands) = ctrl.handle_state_change(payload_json) {
-            let mut queue = self.pending_commands.lock().await;
-            queue.extend(commands);
+        static LAST_SYNC: AtomicU64 = AtomicU64::new(0);
+
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        if now - LAST_SYNC.load(Ordering::Relaxed) < 32{
+            return;
         }
+        LAST_SYNC.store(now, Ordering::Relaxed);
+        let controller_clone=Arc::clone(&self.controller);
+        let pending_clone=Arc::clone(&self.pending_commands);
+        let payload_clone=Arc::clone(&self.last_payload_json);
+
+        tokio::spawn(async move {
+            *(payload_clone.lock().await)=payload_json.clone();
+
+            let mut ctrl= controller_clone.lock().await;
+            if let Ok(commands)=ctrl.handle_state_change(payload_json) {
+                let mut queue= pending_clone.lock().await;
+                queue.extend(commands);
+            }
+        });
+
     }
 
     /// Retorna y limpia la cola de comandos pendientes.

@@ -3,10 +3,19 @@ use crate::application::engine::TilingEngine;
 use crate::infrastructure::dbus::TilingCommand; 
 
 #[derive(Debug, Deserialize)]
-struct KWinWindow { pub id: String, pub f: bool, pub m: bool }
+struct KWinWindow { 
+    pub id: String,
+    #[serde(default)]
+    pub f: bool,
+    #[serde(default)]
+    pub m: bool 
+}
 
 #[derive(Debug, Deserialize)]
-struct KWinPayload { pub windows: Vec<KWinWindow> }
+struct KWinPayload { 
+    #[serde(default)]
+    pub windows: Vec<KWinWindow> 
+}
 
 /// Orquestador principal de la lógica de Raven.
 /// 
