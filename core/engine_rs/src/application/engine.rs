@@ -86,7 +86,7 @@ impl TilingEngine {
         let result = {
             let payload: KWinPayload = match serde_json::from_str(&payload_json) {
                 Ok(p) => p,
-                Err(_e) => return Ok(HashMap::new()),
+                Err(e) => return Err(format!("Payload KWin inválido: {}", e)), // [ROBUSTEZ] Retornar error real
             };
             let mut workspaces = HashMap::new();
             for (ws_id, screen) in payload.screens {

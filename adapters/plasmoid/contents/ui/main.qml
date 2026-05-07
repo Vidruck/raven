@@ -96,7 +96,7 @@ PlasmoidItem {
                         font.pixelSize: Kirigami.Units.gridUnit * 0.9
                     }
                     PlasmaComponents.Label {
-                        text: "v2.0 Native Rust"
+                        text: "v2.5 Native Rust"
                         opacity: 0.6
                         font.pixelSize: Kirigami.Units.gridUnit * 0.7
                     }
@@ -187,6 +187,37 @@ PlasmoidItem {
                     icon.name: "zoom-out"
                     Layout.fillWidth: true
                     onClicked: root.execDbus("incrementGaps", "int32:-2")
+                }
+            }
+
+            Kirigami.Separator { Layout.fillWidth: true }
+
+            // Sección de Migración (Layout Exhaustion)
+            Kirigami.Heading {
+                text: "Migración Manual"
+                level: 4
+                opacity: 0.8
+            }
+
+            GridLayout {
+                columns: 2
+                Layout.fillWidth: true
+                rowSpacing: Kirigami.Units.smallSpacing
+                columnSpacing: Kirigami.Units.smallSpacing
+
+                PlasmaComponents.Button {
+                    text: "Sig. Monitor"
+                    icon.name: "video-display"
+                    Layout.fillWidth: true
+                    // Se deshabilita visualmente si Qt detecta 1 sola pantalla
+                    enabled: Qt.application.screens.length > 1
+                    onClicked: root.execDbus("migrateActiveToScreen", "")
+                }
+                PlasmaComponents.Button {
+                    text: "Sig. Escritorio"
+                    icon.name: "virtual-desktops"
+                    Layout.fillWidth: true
+                    onClicked: root.execDbus("migrateActiveToDesktop", "")
                 }
             }
 

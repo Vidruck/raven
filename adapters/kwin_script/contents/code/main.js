@@ -197,6 +197,51 @@ function init() {
 }
 
 /**
+ * Ejecuta la lógica de migración de una ventana a otro monitor o escritorio.
+ * Sigue la prioridad establecida: 1° Monitor Secundario, 2° Escritorio Virtual.
+ * 
+ * @param {KWin.Window} win La ventana a migrar.
+ * @param {string} strategy Estrategia: 'auto', 'screen', 'desktop'.
+ */
+function migrateWindow(win, strategy) {
+    var screens = workspace.screens || [];
+    var desktops = workspace.desktops || [];
+    
+    var tryScreen = (strategy === "auto" || strategy === "screen");
+    var tryDesktop = (strategy === "auto" || strategy === "desktop");
+
+    // 1. Intentar mover a siguiente pantalla
+    if (tryScreen && screens.length > 1) {
+        var currentOut = win.output || workspace.activeOutput;
+        var idx = screens.indexOf(currentOut);
+        if (idx === -1) idx = 0;
+        var nextIdx = (idx + 1) % screens.length;
+        win.output = screens[nextIdx];
+        return;
+    }
+
+    // 2. Intentar mover a siguiente escritorio virtual
+    if (tryDesktop && desktops.length > 1) {
+        var currentDesks = win.desktops || [];
+        var currentDesk = currentDesks.length > 0 ? currentDesks[0] : workspace.currentDesktop;
+        var idx = desktops.indexOf(currentDesk);
+        if (idx === -1) idx = 0;
+        var nextIdx = (idx + 1) % desktops.length;
+        win.desktops = [desktops[nextIdx]];
+        return;
+    }
+
+    // 3. Fallo: No hay escape posible
+    if (strategy === "auto") {
+        print("[Raven] Fallo migración: solo hay 1 monitor y 1 escritorio.");
+        try {
+            callDBus("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify",
+                "Raven", 0, "dialog-warning", "Límite de Espacio Alcanzado", "Crea un escritorio virtual adicional para alojar las ventanas desbordadas.", [], {}, -1);
+        } catch(e) {}
+    }
+}
+
+/**
  * Procesa y aplica una lista de comandos recibidos desde el daemon de Raven.
  * Soporta acciones de movimiento (move), enfoque (focus) y peticiones de sincronización forzada.
  * 
@@ -238,6 +283,18 @@ function applyCommands(commandsJson) {
             for (var f = 0; f < windows.length; f++) {
                 if (windows[f].internalId.toString() === cmd.window_id) {
                     workspace.activeWindow = windows[f];
+                    break;
+                }
+            }
+        }
+        else if (cmd.action === "migrate_window_auto" || cmd.action === "migrate_to_next_screen" || cmd.action === "migrate_to_next_workspace") {
+            var strategy = "auto";
+            if (cmd.action === "migrate_to_next_screen") strategy = "screen";
+            if (cmd.action === "migrate_to_next_workspace") strategy = "desktop";
+            
+            for (var m = 0; m < windows.length; m++) {
+                if (windows[m].internalId.toString() === cmd.window_id) {
+                    migrateWindow(windows[m], strategy);
                     break;
                 }
             }

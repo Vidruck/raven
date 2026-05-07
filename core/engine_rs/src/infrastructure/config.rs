@@ -52,7 +52,12 @@ impl RavenConfig {
         path.push("raven.json");
 
         if let Ok(content) = fs::read_to_string(&path) {
-            if let Ok(config) = serde_json::from_str::<RavenConfig>(&content) {
+            if let Ok(mut config) = serde_json::from_str::<RavenConfig>(&content) {
+                // [ROBUSTEZ] Sanitizar datos inyectados por el usuario desde JSON
+                config.nmaster = std::cmp::max(1, config.nmaster);
+                config.master_ratio = config.master_ratio.clamp(0.1, 0.9);
+                config.default_gaps = std::cmp::max(0, config.default_gaps);
+
                 println!("[RUST_CONFIG] Preferencias cargadas con éxito desde disco.");
                 return config;
             } else {

@@ -56,27 +56,56 @@ impl RavenDBusService {
     /// en las ventanas (creación, cierre, movimiento manual).
     #[zbus(name = "syncState")]
     async fn sync_state(&self, payload_json: String) {
-        static LAST_SYNC: AtomicU64 = AtomicU64::new(0);
-
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
-        if now - LAST_SYNC.load(Ordering::Relaxed) < 32{
+        // [ROBUSTEZ] Prevención de sobrecarga de memoria por datos corruptos o masivos.
+        // Rechazamos payloads irracionalmente grandes (> 5MB)
+        if payload_json.len() > 5 * 1024 * 1024 {
+            eprintln!("[DBUS ERROR] Payload descartado: excede el límite de 5MB.");
             return;
         }
+
+        static LAST_SYNC: AtomicU64 = AtomicU64::new(0);
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+            
+        // Throttling básico a ~30Hz para evitar saturar el motor
+        if now - LAST_SYNC.load(Ordering::Relaxed) < 32 {
+            // [ROBUSTEZ] Aún si descartamos el cálculo pesado, actualizamos el último estado
+            // conocido para que los atajos de teclado tengan datos frescos.
+            if let Ok(mut last_payload) = self.last_payload_json.try_lock() {
+                *last_payload = payload_json;
+            }
+            return;
+        }
+        
         LAST_SYNC.store(now, Ordering::Relaxed);
-        let controller_clone=Arc::clone(&self.controller);
-        let pending_clone=Arc::clone(&self.pending_commands);
-        let payload_clone=Arc::clone(&self.last_payload_json);
+        
+        let controller_clone = Arc::clone(&self.controller);
+        let pending_clone = Arc::clone(&self.pending_commands);
+        let payload_clone = Arc::clone(&self.last_payload_json);
 
         tokio::spawn(async move {
-            *(payload_clone.lock().await)=payload_json.clone();
+            *(payload_clone.lock().await) = payload_json.clone();
 
-            let mut ctrl= controller_clone.lock().await;
-            if let Ok(commands)=ctrl.handle_state_change(payload_json) {
-                let mut queue= pending_clone.lock().await;
-                queue.extend(commands);
+            let mut ctrl = controller_clone.lock().await;
+            match ctrl.handle_state_change(payload_json) {
+                Ok(commands) => {
+                    let mut queue = pending_clone.lock().await;
+                    // [ROBUSTEZ] Límite máximo de comandos en cola para evitar fugas
+                    if queue.len() > 1000 {
+                        eprintln!("[DBUS WARN] Cola de comandos llena. Limpiando para recuperar estado.");
+                        queue.clear();
+                    }
+                    queue.extend(commands);
+                },
+                Err(e) => {
+                    eprintln!("[ENGINE ERROR] Fallo al procesar cambio de estado: {}", e);
+                    // Aquí el puente sigue vivo, KWin puede intentar un resync en el siguiente frame.
+                }
             }
         });
-
     }
 
     /// Retorna y limpia la cola de comandos pendientes.
@@ -91,12 +120,19 @@ impl RavenDBusService {
         }
         
         let cmds = queue.drain(..).collect::<Vec<_>>();
-        serde_json::to_string(&cmds).unwrap_or_else(|_| String::from("[]"))
+        serde_json::to_string(&cmds).unwrap_or_else(|e| {
+            eprintln!("[DBUS ERROR] Fallo al serializar comandos pendientes: {}", e);
+            String::from("[]")
+        })
     }
 
     /// Actualiza el registro de la ventana activa en el motor.
     #[zbus(name = "windowActivated")]
     async fn window_activated(&self, window_id: String) {
+        // Validación básica de entrada
+        if window_id.trim().is_empty() {
+            return;
+        }
         *self.active_window_id.lock().await = Some(window_id);
     }
 
@@ -132,6 +168,14 @@ impl RavenDBusService {
     #[zbus(name = "focusPrev")]
     async fn focus_prev(&self) { self.dispatch_shortcut("focus_prev", 0).await; }
 
+    /// Envía manualmente la ventana activa al siguiente monitor.
+    #[zbus(name = "migrateActiveToScreen")]
+    async fn migrate_active_to_screen(&self) { self.dispatch_shortcut("migrate_active_to_screen", 0).await; }
+
+    /// Envía manualmente la ventana activa al siguiente escritorio virtual.
+    #[zbus(name = "migrateActiveToDesktop")]
+    async fn migrate_active_to_desktop(&self) { self.dispatch_shortcut("migrate_active_to_desktop", 0).await; }
+
     /// Consulta el estado actual del motor.
     #[zbus(name = "getTilingState")]
     async fn get_tiling_state(&self) -> bool {
@@ -144,17 +188,31 @@ impl RavenDBusService {
     /// Enruta atajos de teclado hacia el controlador y gestiona recálculos necesarios.
     async fn dispatch_shortcut(&self, action: &str, payload: i32) {
         let payload_json = self.last_payload_json.lock().await.clone();
+        
+        // Si no hay estado conocido, no procesamos atajos complejos
+        if payload_json.is_empty() && action != "toggle_tiling" {
+            eprintln!("[DBUS WARN] Ignorando atajo '{}' por falta de estado del compositor.", action);
+            return;
+        }
+
         let active_id = self.active_window_id.lock().await.clone();
         
         let mut ctrl = self.controller.lock().await;
-        if let Ok((needs_recalc, cmds)) = ctrl.handle_shortcut(action.to_string(), payload, payload_json.clone(), active_id) {
-            let mut queue = self.pending_commands.lock().await;
-            queue.extend(cmds);
-            
-            if needs_recalc {
-                if let Ok(recalc_cmds) = ctrl.handle_state_change(payload_json) {
-                    queue.extend(recalc_cmds);
+        match ctrl.handle_shortcut(action.to_string(), payload, payload_json.clone(), active_id) {
+            Ok((needs_recalc, cmds)) => {
+                let mut queue = self.pending_commands.lock().await;
+                if queue.len() > 1000 { queue.clear(); } // Medida de seguridad
+                queue.extend(cmds);
+                
+                if needs_recalc {
+                    match ctrl.handle_state_change(payload_json) {
+                        Ok(recalc_cmds) => queue.extend(recalc_cmds),
+                        Err(e) => eprintln!("[ENGINE ERROR] Fallo al recalcular estado tras atajo: {}", e)
+                    }
                 }
+            },
+            Err(e) => {
+                eprintln!("[ENGINE ERROR] Error al procesar atajo {}: {}", action, e);
             }
         }
     }

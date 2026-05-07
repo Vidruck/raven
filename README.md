@@ -11,27 +11,27 @@
 ![Wayland](https://img.shields.io/badge/Wayland-9999ff?style=for-the-badge&logo=wayland&logoColor=white)
 ![GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)
 
-Raven es un gestor de ventanas dinámico (Tiling Window Manager) diseñado específicamente para **KDE Plasma 6 (Wayland)**. Con la llegada de la **versión 2.0**, Raven alcanza su madurez tecnológica al convertirse en una solución **100% nativa en Rust**, eliminando por completo la capa de dependencia de Python tanto en el motor como en la interfaz de usuario.
+Raven es un gestor de ventanas dinámico (Tiling Window Manager) diseñado específicamente para **KDE Plasma 6 (Wayland)**. Con la llegada de la **versión 2.5**, Raven alcanza su madurez tecnológica al consolidarse como una solución **100% nativa en Rust** y sumar capacidades de gestión multimonitor inteligente.
 
-## 🚀 El Salto a la Versión 2.0: Cambio de Paradigma
-Esta versión culmina el ciclo de transición de arquitectura híbrida (Python + Rust FFI) a un ecosistema puramente binario y nativo. El resultado es un gestor extremadamente rápido, ligero y estable que se integra de forma invisible en el sistema.
+## 🚀 El Salto a la Versión 2.5: Robustez y Multimonitor
+Esta versión fortalece la arquitectura introducida en la 2.0 y añade características de resiliencia avanzadas. El motor matemático es ahora capaz de auto-preservarse frente a sobrecargas del usuario.
 
 ### 📉 Eficiencia Energética y de Memoria
-La optimización ha sido el pilar de esta actualización. Al eliminar el intérprete de Python y las envolturas FFI, hemos reducido el consumo de recursos de manera drástica:
+La optimización sigue siendo el pilar. El motor opera con recursos ridículamente bajos:
 
 | Versión | Arquitectura | Consumo de RAM (aprox.) |
 |---|---|---|
 | **v1.0** | Python Puro | 55.0 MB |
 | **v1.6** | Híbrida (Python + Rust FFI) | ~25.9 MB |
-| **v2.0** | **Native All-Rust Edition** | **~6.0 MB** |
+| **v2.5** | **Native All-Rust Edition** | **~6.0 MB** |
 
-*Una reducción del **89%** en el uso de memoria comparado con la primera versión.*
+*Una reducción inmensa en el uso de memoria comparado con las primeras versiones.*
 
 ## 🌟 Nuevas Funciones y Mejoras
-- **Motor de Topología Global Nativo:** El daemon (`raven_core`) procesa ahora todos los eventos del bus D-Bus de forma directa y asíncrona mediante `zbus`, eliminando cualquier cuello de botella.
-- **Raven Control Center (Renovado):** Una nueva interfaz de configuración moderna y minimalista construida íntegramente en Rust con **egui/eframe**. Sigue automáticamente el esquema de colores (Oscuro/Claro) del sistema y consume una fracción de los recursos que su predecesora.
-- **Compilación sobre Metal:** El motor se compila optimizando específicamente para la arquitectura de tu procesador local durante la instalación, garantizando latencias sub-milisegundo en los cálculos de geometría.
-- **Gestión PiP Avanzada:** La lógica de Picture-in-Picture ha sido refinada para ser más intuitiva y configurable desde la nueva interfaz.
+- **Migración Inteligente (Layout Exhaustion):** El motor detecta matemáticamente cuando una pantalla se satura (si el área de una ventana cae por debajo del 8%). Las ventanas excedentes son propulsadas automáticamente a tu monitor secundario o al siguiente escritorio virtual. ¡Adiós a los mosaicos ilegibles!
+- **Blindaje del IPC y Motor Geométrico:** El puente DBus ahora rechaza payloads corruptos, maneja desconexiones asíncronas seguras y limita las colas de eventos en memoria.
+- **Control de Migración Manual:** Nuevos botones reactivos en el Plasmoid para trasladar la ventana actual entre monitores y escritorios virtuales con un clic.
+- **Motor de Topología Global Nativo:** El daemon procesa eventos de forma directa y asíncrona mediante `zbus`.
 
 ## 🏗️ Nueva Estructura del Proyecto
 - `core/engine_rs/`: El corazón del proyecto. Un daemon nativo asíncrono que escucha al compositor KWin.

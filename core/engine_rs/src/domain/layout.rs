@@ -6,6 +6,11 @@
 use std::collections::HashMap;
 use crate::domain::geometry::{Rect, WindowNode};
 
+/// Porcentaje mínimo del área de la pantalla que puede ocupar una ventana.
+/// Si el cálculo resulta en un área menor, la ventana será rechazada del layout
+/// para que el controlador la migre.
+const MIN_AREA_PERCENTAGE: f32 = 0.08;
+
 /// Aplica un espaciado (gap) interno a un rectángulo.
 ///
 /// Reduce el tamaño del rectángulo y ajusta su posición para crear un margen
@@ -70,12 +75,18 @@ pub fn calculate_master_stack(
         return layout_map;
     }
 
-    let actual_nmaster = std::cmp::min(nmaster, count);
+    // [ROBUSTEZ] Evitar pánico por división entre cero si `nmaster` es 0
+    let actual_nmaster = std::cmp::max(1, std::cmp::min(nmaster, count));
     let has_stack = count > actual_nmaster;
+
+    // Umbral mínimo de área permitido
+    let min_allowed_area = (screen_rect.width as f32 * screen_rect.height as f32 * MIN_AREA_PERCENTAGE) as i32;
 
     // Calcular el ancho de las áreas master y stack
     let master_area_width = if has_stack {
-        (screen_rect.width as f32 * master_ratio) as i32
+        // [ROBUSTEZ] Sanitizar proporción para evitar geometrías corruptas o invisibles
+        let safe_ratio = master_ratio.clamp(0.1, 0.9);
+        (screen_rect.width as f32 * safe_ratio) as i32
     } else {
         screen_rect.width
     };
@@ -93,7 +104,12 @@ pub fn calculate_master_stack(
         };
 
         let rect_master = Rect { x: usable_rect.x, y: current_y, width: master_area_width, height: current_height };
-        layout_map.insert(win.window_id.clone(), apply_gaps(&rect_master, half_g));
+        let final_rect = apply_gaps(&rect_master, half_g);
+        
+        // Verificar límite de desbordamiento
+        if final_rect.width * final_rect.height >= min_allowed_area {
+            layout_map.insert(win.window_id.clone(), final_rect);
+        }
     }
 
     // Posicionar el resto de las ventanas en el área Stack
@@ -116,7 +132,12 @@ pub fn calculate_master_stack(
                 width: stack_area_width,
                 height: current_height,
             };
-            layout_map.insert(win.window_id.clone(), apply_gaps(&rect_stack, half_g));
+            let final_rect = apply_gaps(&rect_stack, half_g);
+            
+            // Verificar límite de desbordamiento
+            if final_rect.width * final_rect.height >= min_allowed_area {
+                layout_map.insert(win.window_id.clone(), final_rect);
+            }
         }
     }
 
