@@ -1,6 +1,6 @@
 use serde::Deserialize;
-use crate::engine::TilingEngine;
-use crate::dbus::TilingCommand; 
+use crate::application::engine::TilingEngine;
+use crate::infrastructure::dbus::TilingCommand; 
 
 #[derive(Debug, Deserialize)]
 struct KWinWindow { pub id: String, pub f: bool, pub m: bool }

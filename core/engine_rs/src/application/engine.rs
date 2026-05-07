@@ -2,9 +2,9 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use crate::config::RavenConfig;
-use crate::geometry::{Rect, WindowNode};
-use crate::layout::calculate_global_topology;
+use crate::infrastructure::config::RavenConfig;
+use crate::domain::geometry::{Rect, WindowNode};
+use crate::domain::layout::calculate_global_topology;
 
 /// Estructuras internas para la deserialización de datos provenientes de KWin.
 #[derive(Debug, Deserialize)]

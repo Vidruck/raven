@@ -4,7 +4,7 @@
 //! de las ventanas (tiling). Actualmente implementa el algoritmo Master-Stack.
 
 use std::collections::HashMap;
-use crate::geometry::{Rect, WindowNode};
+use crate::domain::geometry::{Rect, WindowNode};
 
 /// Aplica un espaciado (gap) interno a un rectángulo.
 ///

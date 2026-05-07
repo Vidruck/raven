@@ -3,7 +3,7 @@ use tokio::sync::Mutex;
 use zbus::interface;
 use serde::Serialize;
 
-use crate::controller::RavenController;
+use crate::application::controller::RavenController;
 
 /// Objeto de Transferencia de Datos (DTO) para comandos de posicionamiento.
 /// 

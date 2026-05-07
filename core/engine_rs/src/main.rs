@@ -3,10 +3,10 @@ use tokio::sync::Mutex;
 use zbus::ConnectionBuilder;
 use std::error::Error;
 
-use raven_core::config::RavenConfig;
-use raven_core::engine::TilingEngine;
-use raven_core::controller::RavenController;
-use raven_core::dbus::RavenDBusService;
+use raven_core::infrastructure::config::RavenConfig;
+use raven_core::application::engine::TilingEngine;
+use raven_core::application::controller::RavenController;
+use raven_core::infrastructure::dbus::RavenDBusService;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

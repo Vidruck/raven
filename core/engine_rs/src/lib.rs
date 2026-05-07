@@ -1,6 +1,4 @@
-pub mod geometry;
-pub mod layout;
-pub mod config;
-pub mod engine;
-pub mod controller;
-pub mod dbus;
+pub mod domain;
+pub mod application;
+pub mod ports;
+pub mod infrastructure;
