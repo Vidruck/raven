@@ -6,7 +6,7 @@
         "Icon": "org.kde.raven.tiling",
         "Id": "org.kde.raven.toggle",
         "Name": "Raven Toggle",
-        "Version": "2.5",
+        "Version": "2.6",
         "Website": "https://github.com/Vidruck/raven"
     },
     "KPackageStructure": "Plasma/Applet",

@@ -96,7 +96,7 @@ PlasmoidItem {
                         font.pixelSize: Kirigami.Units.gridUnit * 0.9
                     }
                     PlasmaComponents.Label {
-                        text: "v2.5 Native Rust"
+                        text: "v2.6 Native Rust"
                         opacity: 0.6
                         font.pixelSize: Kirigami.Units.gridUnit * 0.7
                     }

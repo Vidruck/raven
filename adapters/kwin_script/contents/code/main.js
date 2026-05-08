@@ -232,11 +232,12 @@ function init() {
 
 function migrateWindow(win, strategy) {
     try {
-        var screens = [];
+        var outputs = [];
         try {
-            screens = workspace.screens || [];
+            // En KWin 6 (Plasma 6 / Wayland), se utiliza workspace.outputs
+            outputs = workspace.outputs || [];
         } catch(e) {
-            print("[Raven] Advertencia al leer screens: " + e);
+            print("[Raven] Advertencia al leer outputs: " + e);
         }
         
         var desktops = [];
@@ -249,14 +250,22 @@ function migrateWindow(win, strategy) {
         var tryScreen = (strategy === "auto" || strategy === "screen");
         var tryDesktop = (strategy === "auto" || strategy === "desktop");
 
-        // 1. Intentar mover a siguiente pantalla
-        if (tryScreen && screens.length > 1) {
+        // 1. Intentar mover a siguiente pantalla (Monitor)
+        if (tryScreen && outputs.length > 1) {
             var currentOut = win.output || workspace.activeOutput;
-            var idx = screens.indexOf(currentOut);
-            if (idx === -1) idx = 0;
-            var nextIdx = (idx + 1) % screens.length;
+            var nextIdx = 0;
+            
+            // Buscamos por nombre para evitar problemas de identidad de objetos
+            for (var i = 0; i < outputs.length; i++) {
+                if (outputs[i].name === currentOut.name) {
+                    nextIdx = (i + 1) % outputs.length;
+                    break;
+                }
+            }
+
             try {
-                win.output = screens[nextIdx];
+                win.output = outputs[nextIdx];
+                print("[Raven] Ventana migrada a monitor: " + outputs[nextIdx].name);
                 return;
             } catch (moveErr) {
                 print("[Raven] Error moviendo de pantalla: " + moveErr);
@@ -267,11 +276,18 @@ function migrateWindow(win, strategy) {
         if (tryDesktop && desktops.length > 1) {
             var currentDesks = win.desktops || [];
             var currentDesk = currentDesks.length > 0 ? currentDesks[0] : workspace.currentDesktop;
-            var idx = desktops.indexOf(currentDesk);
-            if (idx === -1) idx = 0;
-            var nextIdx = (idx + 1) % desktops.length;
+            var nextIdx = 0;
+
+            for (var d = 0; d < desktops.length; d++) {
+                if (desktops[d].id === currentDesk.id) {
+                    nextIdx = (d + 1) % desktops.length;
+                    break;
+                }
+            }
+
             try {
                 win.desktops = [desktops[nextIdx]];
+                print("[Raven] Ventana migrada a escritorio: " + desktops[nextIdx].name);
                 return;
             } catch (deskErr) {
                 print("[Raven] Error moviendo de escritorio: " + deskErr);

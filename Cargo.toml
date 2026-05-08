@@ -6,7 +6,17 @@ members = [
 resolver = "2"
 
 [profile.release]
+# Optimización de nivel 3 (máxima velocidad)
 opt-level = 3
-lto = "fat"
+
+# Elimina todos los símbolos de depuración del binario final para reducir tamaño
+strip = true
+
+# Habilita LTO (Link Time Optimization) para optimizar a través de crates
+lto = true
+
+# Reduce las unidades de codegen a 1 para maximizar las optimizaciones de LTO
 codegen-units = 1
+
+# Cambia el comportamiento de pánico a abort para reducir el tamaño del stack de unwinding
 panic = "abort"

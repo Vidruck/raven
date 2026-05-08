@@ -36,6 +36,16 @@ mkdir -p "$TARGET_DIR/bin"
 cp target/release/raven_core "$TARGET_DIR/bin/"
 cp target/release/raven_gui "$TARGET_DIR/bin/"
 
+# Limpieza profunda de archivos residuales para reducir peso de instalación
+echo "Limpiando artefactos de compilación residuales..."
+cargo clean
+
+if [ "$SOURCE_DIR" != "$TARGET_DIR" ]; then
+    cd "$SOURCE_DIR" || exit
+    cargo clean
+    cd "$TARGET_DIR" || exit
+fi
+
 # [3/7] Integración con el Entorno de Escritorio
 echo "[3/7] Configurando iconos y lanzador de aplicaciones..."
 mkdir -p ~/.local/share/icons/hicolor/scalable/apps/
@@ -92,4 +102,4 @@ echo "[7/7] Reiniciando servicios de Raven..."
 systemctl --user daemon-reload
 systemctl --user enable --now raven.service
 
-echo "✅ Raven v2.0 (Native Rust) instalado y operando con éxito. ¡Huélum!"
+echo "✅ Raven v2.6 instalado y operando con éxito. ¡Huélum!"

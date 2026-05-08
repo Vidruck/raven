@@ -11,27 +11,28 @@
 ![Wayland](https://img.shields.io/badge/Wayland-9999ff?style=for-the-badge&logo=wayland&logoColor=white)
 ![GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)
 
-Raven es un gestor de ventanas dinámico (Tiling Window Manager) diseñado específicamente para **KDE Plasma 6 (Wayland)**. Con la llegada de la **versión 2.5**, Raven alcanza su madurez tecnológica al consolidarse como una solución **100% nativa en Rust** y sumar capacidades de gestión multimonitor inteligente.
+Raven es un gestor de ventanas dinámico (Tiling Window Manager) diseñado específicamente para **KDE Plasma 6 (Wayland)**. Con la llegada de la **versión 2.6**, Raven se reestrutura y ajusta a los estándares de la **Arquitectura Hexagonal**, logrando el máximo desacoplamiento entre su lógica de negocio y la infraestructura del sistema operativo, a la vez que introduce optimizaciones agresivas de tamaño y estabilidad.
 
-## 🚀 El Salto a la Versión 2.5: Robustez y Multimonitor
-Esta versión fortalece la arquitectura introducida en la 2.0 y añade características de resiliencia avanzadas. El motor matemático es ahora capaz de auto-preservarse frente a sobrecargas del usuario.
+## 🚀 El Salto a la Versión 2.6: Arquitectura Hexagonal y Micro-Optimización
+Esta versión se enfoca en la perfección estructural y la corrección de fallos críticos, garantizando una experiencia inquebrantable:
 
-### 📉 Eficiencia Energética y de Memoria
-La optimización sigue siendo el pilar. El motor opera con recursos ridículamente bajos:
+### 📉 Eficiencia Energética y de Almacenamiento
+La optimización sigue siendo el pilar. El motor opera con recursos ridículamente bajos y el ejecutable ha sido comprimido al máximo:
 
 | Versión | Arquitectura | Consumo de RAM (aprox.) |
 |---|---|---|
 | **v1.0** | Python Puro | 55.0 MB |
 | **v1.6** | Híbrida (Python + Rust FFI) | ~25.9 MB |
-| **v2.5** | **Native All-Rust Edition** | **~6.0 MB** |
+| **v2.6** | **Optimized Rust** | **~5.8 MB** |
 
-*Una reducción inmensa en el uso de memoria comparado con las primeras versiones.*
+*Una reducción inmensa en el uso de memoria y disco gracias a LTO y la eliminación de símbolos de depuración.*
 
-## 🌟 Nuevas Funciones y Mejoras
-- **Migración Inteligente (Layout Exhaustion):** El motor detecta matemáticamente cuando una pantalla se satura (si el área de una ventana cae por debajo del 8%). Las ventanas excedentes son propulsadas automáticamente a tu monitor secundario o al siguiente escritorio virtual. ¡Adiós a los mosaicos ilegibles!
-- **Blindaje del IPC y Motor Geométrico:** El puente DBus ahora rechaza payloads corruptos, maneja desconexiones asíncronas seguras y limita las colas de eventos en memoria.
-- **Control de Migración Manual:** Nuevos botones reactivos en el Plasmoid para trasladar la ventana actual entre monitores y escritorios virtuales con un clic.
-- **Motor de Topología Global Nativo:** El daemon procesa eventos de forma directa y asíncrona mediante `zbus`.
+## 🌟 Nuevas Funciones y Correcciones (v2.6)
+- **Refactorización a Arquitectura Hexagonal:** Desacoplamiento total del puente de comunicación (DBus/JSON) de la lógica matemática pura. Uso intensivo de DTOs y tipado estricto `RavenError` para una gestión de fallos predecible.
+- **Acciones Amigables de Almacenamiento:** Compilación nivel 3 con `strip`, `lto` y `codegen-units=1`, reduciendo el peso final drásticamente. El instalador ahora ejecuta una **limpieza residual profunda (`cargo clean`)** para no saturar el almacenamiento de tu PC con artefactos intermedios.
+- **Corrección de Bugs Críticos:** Resolución definitiva del *core-dump* inyectando el contexto de `tokio`, y arreglo del sistema de migración multimonitor adaptando el bridge Javascript puramente a la API de Wayland / KWin 6 (`workspace.outputs`).
+- **Migración Inteligente Automatizada:** El motor detecta matemáticamente cuando una pantalla se satura. Las ventanas excedentes son propulsadas a tu monitor secundario o al siguiente escritorio virtual. *(Se requiere un escritorio virtual adicional para usarse).*
+- **Control de Migración Manual:** Botones reactivos en el Plasmoid para trasladar la ventana actual entre monitores y escritorios virtuales con un clic.
 
 ## 🏗️ Nueva Estructura del Proyecto
 - `core/engine_rs/`: El corazón del proyecto. Un daemon nativo asíncrono que escucha al compositor KWin.
