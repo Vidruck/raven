@@ -75,7 +75,7 @@ pub fn calculate_master_stack(
         return layout_map;
     }
 
-    // [ROBUSTEZ] Evitar pánico por división entre cero si `nmaster` es 0
+    // Evitar pánico por división entre cero si nmaster es 0
     let actual_nmaster = std::cmp::max(1, std::cmp::min(nmaster, count));
     let has_stack = count > actual_nmaster;
 
@@ -84,7 +84,7 @@ pub fn calculate_master_stack(
 
     // Calcular el ancho de las áreas master y stack
     let master_area_width = if has_stack {
-        // [ROBUSTEZ] Sanitizar proporción para evitar geometrías corruptas o invisibles
+        // Sanitizar proporción para evitar geometrías corruptas o invisibles
         let safe_ratio = master_ratio.clamp(0.1, 0.9);
         (screen_rect.width as f32 * safe_ratio) as i32
     } else {

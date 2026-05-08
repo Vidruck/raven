@@ -10,22 +10,42 @@
  */
 
 /**
+ * Retorna el ID de la ventana de forma segura (previene accesos a objetos borrados).
+ * 
+ * @param {KWin.Window} w La ventana.
+ * @returns {string|null} El ID o null si es inválida.
+ */
+function getSafeWindowId(w) {
+    try {
+        if (!w || !w.internalId) return null;
+        return w.internalId.toString();
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
  * Genera un identificador único para el espacio de trabajo actual basado en el monitor y el escritorio virtual.
  * 
  * @param {KWin.Window} window La ventana de la cual se desea obtener el ID del workspace.
  * @returns {string} Un string con el formato "NombreMonitor||IDEscritorio".
  */
 function getWorkspaceId(window) {
-    var output = window.output || workspace.activeOutput;
-    var outName = output ? output.name : "default";
-    var desktopId = "default_desk";
+    try {
+        var output = window.output || workspace.activeOutput;
+        var outName = output ? output.name : "default";
+        var desktopId = "default_desk";
 
-    if (window.desktops && window.desktops.length > 0) {
-        desktopId = window.desktops[0].id.toString();
-    } else if (workspace.currentDesktop) {
-        desktopId = workspace.currentDesktop.id.toString();
+        if (window.desktops && window.desktops.length > 0) {
+            desktopId = window.desktops[0].id.toString();
+        } else if (workspace.currentDesktop) {
+            desktopId = workspace.currentDesktop.id.toString();
+        }
+        return outName + "||" + desktopId;
+    } catch (e) {
+        print("[Raven] Error obteniendo WorkspaceId: " + e);
+        return "default||default_desk";
     }
-    return outName + "||" + desktopId;
 }
 
 /**
@@ -137,27 +157,34 @@ function sendFullState() {
         for (var i = 0; i < windows.length; i++) {
             var w = windows[i];
 
-            if (!isManageable(w)) continue;
-            var wsId = getWorkspaceId(w);
-            var output = w.output || workspace.activeOutput;
+            try {
+                if (!isManageable(w)) continue;
+                var safeId = getSafeWindowId(w);
+                if (!safeId) continue;
 
-            if (output && !screens[wsId]) {
-                var desktop = (w.desktops && w.desktops.length > 0) ? w.desktops[0] : workspace.currentDesktop;
-                var area = workspace.clientArea(0, output, desktop);
-                screens[wsId] = {
-                    x: Math.round(area.x),
-                    y: Math.round(area.y),
-                    w: Math.round(area.width),
-                    h: Math.round(area.height),
-                };
+                var wsId = getWorkspaceId(w);
+                var output = w.output || workspace.activeOutput;
+
+                if (output && !screens[wsId]) {
+                    var desktop = (w.desktops && w.desktops.length > 0) ? w.desktops[0] : workspace.currentDesktop;
+                    var area = workspace.clientArea(0, output, desktop);
+                    screens[wsId] = {
+                        x: Math.round(area.x),
+                        y: Math.round(area.y),
+                        w: Math.round(area.width),
+                        h: Math.round(area.height),
+                    };
+                }
+                winState.push({
+                    id: safeId,
+                    ws: wsId,
+                    f: isFloating(w),
+                    m: Boolean(w.minimized),
+                    p: Boolean((w.caption && String(w.caption).toLowerCase().indexOf("picture-in-picture") !== -1) || w.keepAbove)
+                });
+            } catch (windowErr) {
+                print("[Raven Bridge] Error al leer ventana en sendFullState: " + windowErr);
             }
-            winState.push({
-                id: w.internalId.toString(),
-                ws: wsId,
-                f: isFloating(w),
-                m: Boolean(w.minimized),
-                p: Boolean((w.caption && String(w.caption).toLowerCase().indexOf("picture-in-picture") !== -1) || w.keepAbove)
-            });
         }
         
         var payload = { windows: winState, screens: screens };
@@ -189,55 +216,78 @@ function init() {
     workspace.windowRemoved.connect(function(w) { sendFullState(); });
     workspace.windowActivated.connect(function(w) {
         if (w && isManageable(w)) {
-            callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowActivated", w.internalId.toString());
+            var safeId = getSafeWindowId(w);
+            if (safeId) {
+                try {
+                    callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowActivated", safeId);
+                } catch(e) {
+                    print("[Raven Bridge] D-bus Drop windowActivated: " + e);
+                }
+            }
         }
     });
 
     listenForCommands();
 }
 
-/**
- * Ejecuta la lógica de migración de una ventana a otro monitor o escritorio.
- * Sigue la prioridad establecida: 1° Monitor Secundario, 2° Escritorio Virtual.
- * 
- * @param {KWin.Window} win La ventana a migrar.
- * @param {string} strategy Estrategia: 'auto', 'screen', 'desktop'.
- */
 function migrateWindow(win, strategy) {
-    var screens = workspace.screens || [];
-    var desktops = workspace.desktops || [];
-    
-    var tryScreen = (strategy === "auto" || strategy === "screen");
-    var tryDesktop = (strategy === "auto" || strategy === "desktop");
-
-    // 1. Intentar mover a siguiente pantalla
-    if (tryScreen && screens.length > 1) {
-        var currentOut = win.output || workspace.activeOutput;
-        var idx = screens.indexOf(currentOut);
-        if (idx === -1) idx = 0;
-        var nextIdx = (idx + 1) % screens.length;
-        win.output = screens[nextIdx];
-        return;
-    }
-
-    // 2. Intentar mover a siguiente escritorio virtual
-    if (tryDesktop && desktops.length > 1) {
-        var currentDesks = win.desktops || [];
-        var currentDesk = currentDesks.length > 0 ? currentDesks[0] : workspace.currentDesktop;
-        var idx = desktops.indexOf(currentDesk);
-        if (idx === -1) idx = 0;
-        var nextIdx = (idx + 1) % desktops.length;
-        win.desktops = [desktops[nextIdx]];
-        return;
-    }
-
-    // 3. Fallo: No hay escape posible
-    if (strategy === "auto") {
-        print("[Raven] Fallo migración: solo hay 1 monitor y 1 escritorio.");
+    try {
+        var screens = [];
         try {
-            callDBus("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify",
-                "Raven", 0, "dialog-warning", "Límite de Espacio Alcanzado", "Crea un escritorio virtual adicional para alojar las ventanas desbordadas.", [], {}, -1);
-        } catch(e) {}
+            screens = workspace.screens || [];
+        } catch(e) {
+            print("[Raven] Advertencia al leer screens: " + e);
+        }
+        
+        var desktops = [];
+        try {
+            desktops = workspace.desktops || [];
+        } catch(e) {
+            print("[Raven] Advertencia al leer desktops: " + e);
+        }
+        
+        var tryScreen = (strategy === "auto" || strategy === "screen");
+        var tryDesktop = (strategy === "auto" || strategy === "desktop");
+
+        // 1. Intentar mover a siguiente pantalla
+        if (tryScreen && screens.length > 1) {
+            var currentOut = win.output || workspace.activeOutput;
+            var idx = screens.indexOf(currentOut);
+            if (idx === -1) idx = 0;
+            var nextIdx = (idx + 1) % screens.length;
+            try {
+                win.output = screens[nextIdx];
+                return;
+            } catch (moveErr) {
+                print("[Raven] Error moviendo de pantalla: " + moveErr);
+            }
+        }
+
+        // 2. Intentar mover a siguiente escritorio virtual
+        if (tryDesktop && desktops.length > 1) {
+            var currentDesks = win.desktops || [];
+            var currentDesk = currentDesks.length > 0 ? currentDesks[0] : workspace.currentDesktop;
+            var idx = desktops.indexOf(currentDesk);
+            if (idx === -1) idx = 0;
+            var nextIdx = (idx + 1) % desktops.length;
+            try {
+                win.desktops = [desktops[nextIdx]];
+                return;
+            } catch (deskErr) {
+                print("[Raven] Error moviendo de escritorio: " + deskErr);
+            }
+        }
+
+        // 3. Fallo: No hay escape posible
+        if (strategy === "auto") {
+            print("[Raven] Fallo migración: Límite alcanzado o error al mover.");
+            try {
+                callDBus("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify",
+                    "Raven", 0, "dialog-warning", "Límite de Espacio Alcanzado", "Crea un escritorio virtual adicional para alojar las ventanas desbordadas.", [], {}, -1);
+            } catch(e) {}
+        }
+    } catch (globalErr) {
+        print("[Raven] Excepción global atrapada en migrateWindow: " + globalErr);
     }
 }
 
@@ -249,59 +299,78 @@ function migrateWindow(win, strategy) {
  */
 function applyCommands(commandsJson) {
     if (!commandsJson) return;
-    var cmds = JSON.parse(commandsJson);
-    var windows = workspace.windowList();
+    try {
+        var cmds = JSON.parse(commandsJson);
+        var windows = workspace.windowList();
 
-    for (var i = 0; i < cmds.length; i++) {
-        var cmd = cmds[i];
-        if (cmd.action === "move") {
-            for (var j = 0; j < windows.length; j++) {
-                if (windows[j].internalId.toString() === cmd.window_id) {
-                    if (windows[j].maximizeMode === 3) break;
-                    if (windows[j].interactiveMove || windows[j].interactiveResize) break;
+        for (var i = 0; i < cmds.length; i++) {
+            var cmd = cmds[i];
+            if (cmd.action === "move") {
+                for (var j = 0; j < windows.length; j++) {
+                    try {
+                        var safeId = getSafeWindowId(windows[j]);
+                        if (safeId === cmd.window_id) {
+                            if (windows[j].maximizeMode === 3) break;
+                            if (windows[j].interactiveMove || windows[j].interactiveResize) break;
 
-                    var fresh_rect = {
-                        x: Math.round(cmd.x),
-                        y: Math.round(cmd.y),
-                        width: Math.round(cmd.width),
-                        height: Math.round(cmd.height)
-                    };
+                            var fresh_rect = {
+                                x: Math.round(cmd.x),
+                                y: Math.round(cmd.y),
+                                width: Math.round(cmd.width),
+                                height: Math.round(cmd.height)
+                            };
 
-                    windows[j].__raven_mutating = true;
-                    windows[j].frameGeometry = fresh_rect;
-                    setKWinTimeout((function(win) {
-                        return function() {
-                            if (win) win.__raven_mutating = false;
-                        };
-                    })(windows[j]), 32);
+                            windows[j].__raven_mutating = true;
+                            windows[j].frameGeometry = fresh_rect;
+                            setKWinTimeout((function(win) {
+                                return function() {
+                                    try { if (win) win.__raven_mutating = false; } catch(e) {}
+                                };
+                            })(windows[j]), 32);
 
-                    break;
+                            break;
+                        }
+                    } catch (e) {
+                        print("[Raven Bridge] Error aplicando 'move': " + e);
+                    }
                 }
             }
-        }
-        else if (cmd.action === "focus") {
-            for (var f = 0; f < windows.length; f++) {
-                if (windows[f].internalId.toString() === cmd.window_id) {
-                    workspace.activeWindow = windows[f];
-                    break;
+            else if (cmd.action === "focus") {
+                for (var f = 0; f < windows.length; f++) {
+                    try {
+                        var safeId = getSafeWindowId(windows[f]);
+                        if (safeId === cmd.window_id) {
+                            workspace.activeWindow = windows[f];
+                            break;
+                        }
+                    } catch (e) {
+                        print("[Raven Bridge] Error aplicando 'focus': " + e);
+                    }
                 }
             }
-        }
-        else if (cmd.action === "migrate_window_auto" || cmd.action === "migrate_to_next_screen" || cmd.action === "migrate_to_next_workspace") {
-            var strategy = "auto";
-            if (cmd.action === "migrate_to_next_screen") strategy = "screen";
-            if (cmd.action === "migrate_to_next_workspace") strategy = "desktop";
-            
-            for (var m = 0; m < windows.length; m++) {
-                if (windows[m].internalId.toString() === cmd.window_id) {
-                    migrateWindow(windows[m], strategy);
-                    break;
+            else if (cmd.action === "migrate_window_auto" || cmd.action === "migrate_to_next_screen" || cmd.action === "migrate_to_next_workspace") {
+                var strategy = "auto";
+                if (cmd.action === "migrate_to_next_screen") strategy = "screen";
+                if (cmd.action === "migrate_to_next_workspace") strategy = "desktop";
+                
+                for (var m = 0; m < windows.length; m++) {
+                    try {
+                        var safeId = getSafeWindowId(windows[m]);
+                        if (safeId === cmd.window_id) {
+                            migrateWindow(windows[m], strategy);
+                            break;
+                        }
+                    } catch (e) {
+                        print("[Raven Bridge] Error aplicando 'migrate': " + e);
+                    }
                 }
             }
+            else if (cmd.action === "request_sync") {
+                sendFullState();
+            }
         }
-        else if (cmd.action === "request_sync") {
-            sendFullState();
-        }
+    } catch (mainErr) {
+        print("[Raven Bridge] Excepción global en applyCommands: " + mainErr);
     }
 }
 

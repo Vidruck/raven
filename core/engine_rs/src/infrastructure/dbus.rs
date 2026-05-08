@@ -1,11 +1,83 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::runtime::Handle;
 use zbus::interface;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::collections::HashMap;
 
 use crate::application::controller::RavenController;
+use crate::domain::geometry::{Rect, WindowNode};
+use crate::domain::action::RavenAction;
+use crate::domain::error::RavenError;
+
+/// Representa las dimensiones y posición de una pantalla según KWin.
+#[derive(Debug, Deserialize)]
+pub struct KWinScreen {
+    /// Posición en el eje X.
+    pub x: i32,
+    /// Posición en el eje Y.
+    pub y: i32,
+    /// Ancho de la pantalla.
+    pub w: i32,
+    /// Alto de la pantalla.
+    pub h: i32,
+}
+
+/// Representa el estado de una ventana enviado por el bridge de KWin.
+#[derive(Debug, Deserialize)]
+pub struct KWinWindow {
+    /// Identificador único de la ventana.
+    pub id: String,
+    /// Identificador del escritorio virtual (Workspace).
+    #[serde(default)]
+    pub ws: String,
+    /// Indica si la ventana es flotante.
+    #[serde(default)]
+    pub f: bool,
+    /// Indica si la ventana está maximizada.
+    #[serde(default)]
+    pub m: bool,
+    /// Indica si la ventana está en modo Picture-in-Picture.
+    #[serde(default)]
+    pub p: bool,
+}
+
+/// Estructura raíz que contiene el estado completo del compositor.
+#[derive(Debug, Deserialize)]
+pub struct KWinPayload {
+    /// Listado de ventanas activas.
+    #[serde(default)]
+    pub windows: Vec<KWinWindow>,
+    /// Mapa de pantallas detectadas por su identificador.
+    #[serde(default)]
+    pub screens: HashMap<String, KWinScreen>,
+}
+
+/// Procesa la cadena JSON cruda proveniente de KWin y la convierte a objetos de dominio.
+/// 
+/// Realiza la transformación de tipos de infraestructura (`KWinPayload`) a tipos
+/// de dominio puro (`Rect`, `WindowNode`) para desacoplar la lógica de negocio.
+fn parse_payload(payload_json: &str) -> Result<(HashMap<String, Rect>, Vec<WindowNode>), RavenError> {
+    if payload_json.is_empty() || payload_json == "{}" {
+        return Ok((HashMap::new(), Vec::new()));
+    }
+    let payload: KWinPayload = serde_json::from_str(payload_json)
+        .map_err(|e| RavenError::ValidationError(format!("Payload KWin inválido: {}", e)))?;
+        
+    let mut workspaces = HashMap::new();
+    for (ws_id, screen) in payload.screens {
+        workspaces.insert(ws_id, Rect::new(screen.x, screen.y, screen.w, screen.h));
+    }
+    
+    let mut windows = Vec::with_capacity(payload.windows.len());
+    for win in payload.windows {
+        windows.push(WindowNode::new(win.id, win.ws, win.f, win.m, win.p));
+    }
+    
+    Ok((workspaces, windows))
+}
 
 /// Objeto de Transferencia de Datos (DTO) para comandos de posicionamiento.
 /// 
@@ -32,7 +104,43 @@ pub struct TilingCommand {
     pub height: Option<i32>,
 }
 
-/// Punto de entrada para las señales y métodos de DBus.
+impl From<RavenAction> for TilingCommand {
+    /// Convierte una acción de dominio abstracta en un comando concreto para el bridge.
+    fn from(action: RavenAction) -> Self {
+        match action {
+            RavenAction::MoveWindow { window_id, x, y, width, height } => TilingCommand {
+                action: "move".to_string(),
+                window_id: Some(window_id),
+                x: Some(x),
+                y: Some(y),
+                width: Some(width),
+                height: Some(height),
+            },
+            RavenAction::FocusWindow { window_id } => TilingCommand {
+                action: "focus".to_string(),
+                window_id: Some(window_id),
+                x: None, y: None, width: None, height: None,
+            },
+            RavenAction::MigrateAuto { window_id } => TilingCommand {
+                action: "migrate_window_auto".to_string(),
+                window_id: Some(window_id),
+                x: None, y: None, width: None, height: None,
+            },
+            RavenAction::MigrateToNextScreen { window_id } => TilingCommand {
+                action: "migrate_to_next_screen".to_string(),
+                window_id: Some(window_id),
+                x: None, y: None, width: None, height: None,
+            },
+            RavenAction::MigrateToNextWorkspace { window_id } => TilingCommand {
+                action: "migrate_to_next_workspace".to_string(),
+                window_id: Some(window_id),
+                x: None, y: None, width: None, height: None,
+            },
+        }
+    }
+}
+
+/// Punto de entrada para las señales y métodos de D-Bus.
 /// 
 /// Expone la interfaz `org.kde.raven.Events` que es consumida por KWin.
 /// Utiliza un modelo de concurrencia basado en `Arc<Mutex<T>>` para permitir
@@ -46,6 +154,8 @@ pub struct RavenDBusService {
     pub active_window_id: Arc<Mutex<Option<String>>>,
     /// Último estado completo recibido (cacheado para recálculos rápidos).
     pub last_payload_json: Arc<Mutex<String>>,
+    /// Manejador inyectado del runtime de Tokio para delegar tareas.
+    pub tokio_handle: Handle,
 }
 
 #[interface(name = "org.kde.raven.Events")]
@@ -53,11 +163,9 @@ impl RavenDBusService {
     /// Sincroniza el estado masivo del compositor.
     /// 
     /// Este método es llamado por KWin cada vez que ocurre un cambio estructural
-    /// en las ventanas (creación, cierre, movimiento manual).
+    /// en las ventanas. Realiza un throttling para evitar saturar el motor.
     #[zbus(name = "syncState")]
     async fn sync_state(&self, payload_json: String) {
-        // [ROBUSTEZ] Prevención de sobrecarga de memoria por datos corruptos o masivos.
-        // Rechazamos payloads irracionalmente grandes (> 5MB)
         if payload_json.len() > 5 * 1024 * 1024 {
             eprintln!("[DBUS ERROR] Payload descartado: excede el límite de 5MB.");
             return;
@@ -70,10 +178,7 @@ impl RavenDBusService {
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
             
-        // Throttling básico a ~30Hz para evitar saturar el motor
         if now - LAST_SYNC.load(Ordering::Relaxed) < 32 {
-            // [ROBUSTEZ] Aún si descartamos el cálculo pesado, actualizamos el último estado
-            // conocido para que los atajos de teclado tengan datos frescos.
             if let Ok(mut last_payload) = self.last_payload_json.try_lock() {
                 *last_payload = payload_json;
             }
@@ -86,23 +191,30 @@ impl RavenDBusService {
         let pending_clone = Arc::clone(&self.pending_commands);
         let payload_clone = Arc::clone(&self.last_payload_json);
 
-        tokio::spawn(async move {
+        self.tokio_handle.spawn(async move {
             *(payload_clone.lock().await) = payload_json.clone();
 
+            let (workspaces, windows) = match parse_payload(&payload_json) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("[DBUS ERROR] Error en sync_state: {}", e);
+                    return;
+                }
+            };
+
             let mut ctrl = controller_clone.lock().await;
-            match ctrl.handle_state_change(payload_json) {
+            match ctrl.handle_state_change(workspaces, windows) {
                 Ok(commands) => {
                     let mut queue = pending_clone.lock().await;
-                    // [ROBUSTEZ] Límite máximo de comandos en cola para evitar fugas
                     if queue.len() > 1000 {
                         eprintln!("[DBUS WARN] Cola de comandos llena. Limpiando para recuperar estado.");
                         queue.clear();
                     }
-                    queue.extend(commands);
+                    let dbus_commands: Vec<TilingCommand> = commands.into_iter().map(Into::into).collect();
+                    queue.extend(dbus_commands);
                 },
                 Err(e) => {
                     eprintln!("[ENGINE ERROR] Fallo al procesar cambio de estado: {}", e);
-                    // Aquí el puente sigue vivo, KWin puede intentar un resync en el siguiente frame.
                 }
             }
         });
@@ -110,8 +222,8 @@ impl RavenDBusService {
 
     /// Retorna y limpia la cola de comandos pendientes.
     /// 
-    /// KWin llama a este método periódicamente (polling) o tras señales para
-    /// aplicar los cambios de geometría calculados por el motor Rust.
+    /// KWin llama a este método periódicamente para aplicar los cambios de 
+    /// geometría calculados por el motor de Raven.
     #[zbus(name = "getPendingCommands")]
     async fn get_pending_commands(&self) -> String {
         let mut queue = self.pending_commands.lock().await;
@@ -129,7 +241,6 @@ impl RavenDBusService {
     /// Actualiza el registro de la ventana activa en el motor.
     #[zbus(name = "windowActivated")]
     async fn window_activated(&self, window_id: String) {
-        // Validación básica de entrada
         if window_id.trim().is_empty() {
             return;
         }
@@ -189,25 +300,31 @@ impl RavenDBusService {
     async fn dispatch_shortcut(&self, action: &str, payload: i32) {
         let payload_json = self.last_payload_json.lock().await.clone();
         
-        // Si no hay estado conocido, no procesamos atajos complejos
         if payload_json.is_empty() && action != "toggle_tiling" {
             eprintln!("[DBUS WARN] Ignorando atajo '{}' por falta de estado del compositor.", action);
             return;
         }
 
         let active_id = self.active_window_id.lock().await.clone();
-        
+        let parsed_windows = parse_payload(&payload_json).map(|p| p.1).unwrap_or_default();
+
         let mut ctrl = self.controller.lock().await;
-        match ctrl.handle_shortcut(action.to_string(), payload, payload_json.clone(), active_id) {
+        match ctrl.handle_shortcut(action.to_string(), payload, parsed_windows, active_id) {
             Ok((needs_recalc, cmds)) => {
                 let mut queue = self.pending_commands.lock().await;
-                if queue.len() > 1000 { queue.clear(); } // Medida de seguridad
-                queue.extend(cmds);
+                if queue.len() > 1000 { queue.clear(); }
+                let dbus_commands: Vec<TilingCommand> = cmds.into_iter().map(Into::into).collect();
+                queue.extend(dbus_commands);
                 
                 if needs_recalc {
-                    match ctrl.handle_state_change(payload_json) {
-                        Ok(recalc_cmds) => queue.extend(recalc_cmds),
-                        Err(e) => eprintln!("[ENGINE ERROR] Fallo al recalcular estado tras atajo: {}", e)
+                    if let Ok((workspaces, windows)) = parse_payload(&payload_json) {
+                        match ctrl.handle_state_change(workspaces, windows) {
+                            Ok(recalc_cmds) => {
+                                let recalc_dbus_cmds: Vec<TilingCommand> = recalc_cmds.into_iter().map(Into::into).collect();
+                                queue.extend(recalc_dbus_cmds);
+                            },
+                            Err(e) => eprintln!("[ENGINE ERROR] Fallo al recalcular estado tras atajo: {}", e)
+                        }
                     }
                 }
             },

@@ -1,42 +1,16 @@
-
-use serde::Deserialize;
 use std::collections::HashMap;
 
 use crate::infrastructure::config::RavenConfig;
 use crate::domain::geometry::{Rect, WindowNode};
 use crate::domain::layout::calculate_global_topology;
-
-/// Estructuras internas para la deserialización de datos provenientes de KWin.
-#[derive(Debug, Deserialize)]
-struct KWinScreen {
-    pub x: i32,
-    pub y: i32,
-    pub w: i32,
-    pub h: i32,
-}
-
-#[derive(Debug, Deserialize)]
-struct KWinWindow {
-    pub id: String,
-    pub ws: String,
-    pub f: bool,
-    pub m: bool,
-    pub p: bool,
-}
-
-/// Representa la carga útil (payload) completa enviada por el script de KWin.
-#[derive(Debug, Deserialize)]
-struct KWinPayload {
-    pub windows: Vec<KWinWindow>,
-    pub screens: HashMap<String, KWinScreen>,
-}
+use crate::domain::error::RavenError;
 
 /// El núcleo lógico del motor de mosaico (Tiling Engine).
 /// 
 /// Esta estructura mantiene el estado global del motor, incluyendo su configuración
-/// activa y si el modo de mosaico está habilitado para el usuario actual.
+/// activa y si el modo de mosaico está habilitado.
 pub struct TilingEngine {
-    /// Configuración de preferencias (gaps, ratios, etc.).
+    /// Configuración de preferencias (márgenes, proporciones, etc.).
     pub config: RavenConfig,
     /// Estado operativo del motor.
     pub is_tiling_enabled: bool,
@@ -64,48 +38,35 @@ impl TilingEngine {
         self.is_tiling_enabled
     }
 
-    /// Procesa un payload JSON de KWin y calcula la nueva disposición de ventanas.
+    /// Calcula la nueva disposición de ventanas basándose en el estado del dominio.
     /// 
-    /// Este método deserializa la información del sistema (ventanas y pantallas),
-    /// la convierte a estructuras internas de Raven y ejecuta el algoritmo de 
-    /// topología global para determinar las nuevas posiciones.
+    /// Ejecuta el algoritmo de topología global para determinar las nuevas 
+    /// posiciones y dimensiones de cada ventana según la configuración actual.
     /// 
     /// # Parámetros
-    /// * `payload_json` - Cadena JSON cruda enviada por el adaptador de KWin.
+    /// * `workspaces` - Mapa de áreas de trabajo disponibles.
+    /// * `windows` - Listado de nodos de ventana a organizar.
     /// 
     /// # Retorno
-    /// Un `Result` que contiene un mapa de geometrías calculadas o un mensaje de error.
+    /// Un `Result` con un mapa de geometrías calculadas o un error de dominio.
     pub fn calculate_from_payload(
         &self,
-        payload_json: String,
-    ) -> Result<HashMap<String, Rect>, String> {
-        if !self.is_tiling_enabled || payload_json.is_empty() {
+        workspaces: HashMap<String, Rect>,
+        windows: Vec<WindowNode>,
+    ) -> Result<HashMap<String, Rect>, RavenError> {
+        if !self.is_tiling_enabled || windows.is_empty() {
             return Ok(HashMap::new());
         }
         let config_clone = self.config.clone();
-        let result = {
-            let payload: KWinPayload = match serde_json::from_str(&payload_json) {
-                Ok(p) => p,
-                Err(e) => return Err(format!("Payload KWin inválido: {}", e)), // [ROBUSTEZ] Retornar error real
-            };
-            let mut workspaces = HashMap::new();
-            for (ws_id, screen) in payload.screens {
-                workspaces.insert(ws_id, Rect::new(screen.x, screen.y, screen.w, screen.h));
-            }
-            let mut windows = Vec::with_capacity(payload.windows.len());
-            for win in payload.windows {
-                windows.push(WindowNode::new(win.id, win.ws, win.f, win.m, win.p));
-            }
-
-            calculate_global_topology(
-                windows,
-                workspaces,
-                config_clone.nmaster,
-                config_clone.master_ratio,
-                config_clone.default_gaps,
-                &config_clone.pip_position,
-            )
-        };
+        
+        let result = calculate_global_topology(
+            windows,
+            workspaces,
+            config_clone.nmaster,
+            config_clone.master_ratio,
+            config_clone.default_gaps,
+            &config_clone.pip_position,
+        );
         Ok(result)
     }
 }
