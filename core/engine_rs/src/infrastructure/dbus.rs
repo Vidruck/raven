@@ -3,8 +3,6 @@ use tokio::sync::Mutex;
 use tokio::runtime::Handle;
 use zbus::interface;
 use serde::{Serialize, Deserialize};
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::collections::HashMap;
 
 use crate::application::controller::RavenController;
@@ -166,38 +164,28 @@ impl RavenDBusService {
     /// en las ventanas. Realiza un throttling para evitar saturar el motor.
     #[zbus(name = "syncState")]
     async fn sync_state(&self, payload_json: String) {
+        // Protección de Memoria (OOM): Validación inmediata antes de delegar al hilo.
         if payload_json.len() > 5 * 1024 * 1024 {
             eprintln!("[DBUS ERROR] Payload descartado: excede el límite de 5MB.");
             return;
         }
 
-        static LAST_SYNC: AtomicU64 = AtomicU64::new(0);
-
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
-            
-        if now - LAST_SYNC.load(Ordering::Relaxed) < 32 {
-            if let Ok(mut last_payload) = self.last_payload_json.try_lock() {
-                *last_payload = payload_json;
-            }
-            return;
-        }
-        
-        LAST_SYNC.store(now, Ordering::Relaxed);
-        
         let controller_clone = Arc::clone(&self.controller);
         let pending_clone = Arc::clone(&self.pending_commands);
-        let payload_clone = Arc::clone(&self.last_payload_json);
+        let payload_cache_clone = Arc::clone(&self.last_payload_json);
 
+        // Offload Computacional (Tokio): El hilo principal de D-Bus queda libre inmediatamente.
         self.tokio_handle.spawn(async move {
-            *(payload_clone.lock().await) = payload_json.clone();
+            // Actualizamos la caché del último estado recibido.
+            {
+                let mut cache = payload_cache_clone.lock().await;
+                *cache = payload_json.clone();
+            }
 
             let (workspaces, windows) = match parse_payload(&payload_json) {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("[DBUS ERROR] Error en sync_state: {}", e);
+                    eprintln!("[DBUS ERROR] Error en sync_state (parsing): {}", e);
                     return;
                 }
             };
@@ -206,10 +194,13 @@ impl RavenDBusService {
             match ctrl.handle_state_change(workspaces, windows) {
                 Ok(commands) => {
                     let mut queue = pending_clone.lock().await;
-                    if queue.len() > 1000 {
-                        eprintln!("[DBUS WARN] Cola de comandos llena. Limpiando para recuperar estado.");
+                    
+                    // Limpieza Preventiva de la Cola: Mitigación de memory leaks.
+                    if queue.len() > 200 {
+                        eprintln!("[DBUS WARN] Cola saturada (>200). Limpiando para evitar bloqueos.");
                         queue.clear();
                     }
+                    
                     let dbus_commands: Vec<TilingCommand> = commands.into_iter().map(Into::into).collect();
                     queue.extend(dbus_commands);
                 },
@@ -312,7 +303,7 @@ impl RavenDBusService {
         match ctrl.handle_shortcut(action.to_string(), payload, parsed_windows, active_id) {
             Ok((needs_recalc, cmds)) => {
                 let mut queue = self.pending_commands.lock().await;
-                if queue.len() > 1000 { queue.clear(); }
+                if queue.len() > 200 { queue.clear(); }
                 let dbus_commands: Vec<TilingCommand> = cmds.into_iter().map(Into::into).collect();
                 queue.extend(dbus_commands);
                 

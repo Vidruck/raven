@@ -4,7 +4,7 @@
  * Este script actúa como un puente (bridge) entre el gestor de composición KWin y el daemon 
  * de Raven. Su función principal es capturar eventos de ventanas y cambios en la composición,
  * sincronizando el estado mediante D-Bus para permitir el manejo del tiling (mosaico) desde 
- * el motor externo en Python/Rust.
+ * el motor externo en Rust.
  * 
  * @author Alejandro González Hernández (Vidruck)
  */
@@ -106,21 +106,29 @@ function isFloating(w) {
 var _sync_timer = null;
 
 /**
+ * Solicita una sincronización de estado global.
+ * Implementa un mecanismo de coalescing global de 48ms para agrupar múltiples eventos 
+ * rápidos en un único envío de estado a través de D-Bus.
+ */
+function requestStateSync() {
+    if (_sync_timer) return;
+    _sync_timer = setKWinTimeout(syncState, 48);
+}
+
+/**
  * Conecta los eventos de cambio de una ventana a la lógica de sincronización de Raven.
- * Gestiona cambios de estado (minimizado, geometría, clase) y detecta interacciones de intercambio (drag-to-swap).
  * 
  * @param {KWin.Window} w La ventana a vincular.
  */
-
 function bindWindow(w) {
     if (!isManageable(w) || w.__raven_bound) return;
     w.__raven_bound = true;
     
-    w.minimizedChanged.connect(sendFullState);
-    w.outputChanged.connect(sendFullState);
-    w.desktopsChanged.connect(sendFullState);
-    w.captionChanged.connect(sendFullState);
-    w.windowClassChanged.connect(sendFullState);
+    w.minimizedChanged.connect(requestStateSync);
+    w.outputChanged.connect(requestStateSync);
+    w.desktopsChanged.connect(requestStateSync);
+    w.captionChanged.connect(requestStateSync);
+    w.windowClassChanged.connect(requestStateSync);
     
     w.frameGeometryChanged.connect(function() {
         if (w.__raven_mutating) return;
@@ -132,68 +140,63 @@ function bindWindow(w) {
 
         if (w.__was_interacting && !w.interactiveMove && !w.interactiveResize) {
             w.__was_interacting = false;
-            sendFullState();
+            requestStateSync();
             return;
         }
 
-        sendFullState();
+        requestStateSync();
     });
 }
 
 /**
  * Envía el estado completo de todas las ventanas gestionables y las geometrías de pantalla a Raven.
- * Implementa un mecanismo de debouncing (32ms) para evitar saturar el bus de D-Bus durante cambios rápidos.
+ * Ejecuta la llamada D-Bus de forma asíncrona mediante un callback vacío.
  */
-function sendFullState() {
-    if (_sync_timer) {
-        return;
-    }
-    _sync_timer = setKWinTimeout(function () {
-        _sync_timer = null;
-        var windows = workspace.windowList();
-        var winState = [];
-        var screens = {};
-        
-        for (var i = 0; i < windows.length; i++) {
-            var w = windows[i];
+function syncState() {
+    _sync_timer = null;
+    var windows = workspace.windowList();
+    var winState = [];
+    var screens = {};
+    
+    for (var i = 0; i < windows.length; i++) {
+        var w = windows[i];
 
-            try {
-                if (!isManageable(w)) continue;
-                var safeId = getSafeWindowId(w);
-                if (!safeId) continue;
-
-                var wsId = getWorkspaceId(w);
-                var output = w.output || workspace.activeOutput;
-
-                if (output && !screens[wsId]) {
-                    var desktop = (w.desktops && w.desktops.length > 0) ? w.desktops[0] : workspace.currentDesktop;
-                    var area = workspace.clientArea(0, output, desktop);
-                    screens[wsId] = {
-                        x: Math.round(area.x),
-                        y: Math.round(area.y),
-                        w: Math.round(area.width),
-                        h: Math.round(area.height),
-                    };
-                }
-                winState.push({
-                    id: safeId,
-                    ws: wsId,
-                    f: isFloating(w),
-                    m: Boolean(w.minimized),
-                    p: Boolean((w.caption && String(w.caption).toLowerCase().indexOf("picture-in-picture") !== -1) || w.keepAbove)
-                });
-            } catch (windowErr) {
-                print("[Raven Bridge] Error al leer ventana en sendFullState: " + windowErr);
-            }
-        }
-        
-        var payload = { windows: winState, screens: screens };
         try {
-            callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "syncState", JSON.stringify(payload));
-        } catch (e) {
-            print("[Raven Bridge] D-bus Drop (Filtro de Seguridad Activo)" + e);
+            if (!isManageable(w)) continue;
+            var safeId = getSafeWindowId(w);
+            if (!safeId) continue;
+
+            var wsId = getWorkspaceId(w);
+            var output = w.output || workspace.activeOutput;
+
+            if (output && !screens[wsId]) {
+                var desktop = (w.desktops && w.desktops.length > 0) ? w.desktops[0] : workspace.currentDesktop;
+                var area = workspace.clientArea(0, output, desktop);
+                screens[wsId] = {
+                    x: Math.round(area.x),
+                    y: Math.round(area.y),
+                    w: Math.round(area.width),
+                    h: Math.round(area.height),
+                };
+            }
+            winState.push({
+                id: safeId,
+                ws: wsId,
+                f: isFloating(w),
+                m: Boolean(w.minimized),
+                p: Boolean((w.caption && String(w.caption).toLowerCase().indexOf("picture-in-picture") !== -1) || w.keepAbove)
+            });
+        } catch (windowErr) {
+            print("[Raven Bridge] Error al leer ventana en syncState: " + windowErr);
         }
-    }, 32); 
+    }
+    
+    var payload = { windows: winState, screens: screens };
+    try {
+        callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "syncState", JSON.stringify(payload), function() {});
+    } catch (e) {
+        print("[Raven Bridge] D-bus Drop (Filtro de Seguridad Activo)" + e);
+    }
 }
 
 
@@ -209,17 +212,17 @@ function init() {
     workspace.windowAdded.connect(function(w) {
         if (isManageable(w)) {
             bindWindow(w);
-            sendFullState();
+            requestStateSync();
         }
     });
 
-    workspace.windowRemoved.connect(function(w) { sendFullState(); });
+    workspace.windowRemoved.connect(function(w) { requestStateSync(); });
     workspace.windowActivated.connect(function(w) {
         if (w && isManageable(w)) {
             var safeId = getSafeWindowId(w);
             if (safeId) {
                 try {
-                    callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowActivated", safeId);
+                    callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "windowActivated", safeId, function() {});
                 } catch(e) {
                     print("[Raven Bridge] D-bus Drop windowActivated: " + e);
                 }
@@ -230,6 +233,14 @@ function init() {
     listenForCommands();
 }
 
+/**
+ * Migra una ventana a otro monitor o escritorio virtual siguiendo una estrategia específica.
+ * Si se agotan las opciones de migración en modo automático, la ventana se minimiza 
+ * para evitar bloqueos en el layout y se notifica al usuario.
+ * 
+ * @param {KWin.Window} win La ventana a migrar.
+ * @param {string} strategy La estrategia de migración ("auto", "screen", "desktop").
+ */
 function migrateWindow(win, strategy) {
     try {
         var outputs = [];
@@ -255,7 +266,6 @@ function migrateWindow(win, strategy) {
             var currentOut = win.output || workspace.activeOutput;
             var nextIdx = 0;
             
-            // Buscamos por nombre para evitar problemas de identidad de objetos
             for (var i = 0; i < outputs.length; i++) {
                 if (outputs[i].name === currentOut.name) {
                     nextIdx = (i + 1) % outputs.length;
@@ -295,11 +305,14 @@ function migrateWindow(win, strategy) {
         }
 
         // 3. Fallo: No hay escape posible
-        if (strategy === "auto") {
-            print("[Raven] Fallo migración: Límite alcanzado o error al mover.");
+        // Garantizamos que solo se dispara si se demuestra que no existen monitores ni escritorios adicionales.
+        if (strategy === "auto" && outputs.length <= 1 && desktops.length <= 1) {
+            print("[Raven] Fallo migración: Límite alcanzado (No hay más pantallas ni escritorios). Minimizando.");
+            // Mitigación: Forzar la minimización para romper el loop del layout
+            win.minimized = true; 
             try {
                 callDBus("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify",
-                    "Raven", 0, "dialog-warning", "Límite de Espacio Alcanzado", "Crea un escritorio virtual adicional para alojar las ventanas desbordadas.", [], {}, -1);
+                    "Raven", 0, "dialog-warning", "Límite de Espacio Alcanzado", "Se ha minimizado una ventana por falta de espacio. Crea un escritorio virtual adicional.", [], {}, -1);
             } catch(e) {}
         }
     } catch (globalErr) {
@@ -309,7 +322,8 @@ function migrateWindow(win, strategy) {
 
 /**
  * Procesa y aplica una lista de comandos recibidos desde el daemon de Raven.
- * Soporta acciones de movimiento (move), enfoque (focus) y peticiones de sincronización forzada.
+ * Soporta acciones de movimiento (move), enfoque (focus), migración (migrate)
+ * y peticiones de sincronización forzada (request_sync).
  * 
  * @param {string} commandsJson String JSON que contiene el arreglo de comandos a ejecutar.
  */
@@ -336,7 +350,7 @@ function applyCommands(commandsJson) {
                                 height: Math.round(cmd.height)
                             };
 
-                            windows[j].__raven_mutating = true;
+                            windows[j].__raven_mutating = true; // Bloquea feedback de eventos durante el reposicionamiento
                             windows[j].frameGeometry = fresh_rect;
                             setKWinTimeout((function(win) {
                                 return function() {
@@ -382,7 +396,7 @@ function applyCommands(commandsJson) {
                 }
             }
             else if (cmd.action === "request_sync") {
-                sendFullState();
+                requestStateSync();
             }
         }
     } catch (mainErr) {

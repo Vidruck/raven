@@ -27,12 +27,18 @@ La optimización sigue siendo el pilar. El motor opera con recursos ridículamen
 
 *Una reducción inmensa en el uso de memoria y disco gracias a LTO y la eliminación de símbolos de depuración.*
 
-## 🌟 Nuevas Funciones y Correcciones (v2.6)
-- **Refactorización a Arquitectura Hexagonal:** Desacoplamiento total del puente de comunicación (DBus/JSON) de la lógica matemática pura. Uso intensivo de DTOs y tipado estricto `RavenError` para una gestión de fallos predecible.
-- **Acciones Amigables de Almacenamiento:** Compilación nivel 3 con `strip`, `lto` y `codegen-units=1`, reduciendo el peso final drásticamente. El instalador ahora ejecuta una **limpieza residual profunda (`cargo clean`)** para no saturar el almacenamiento de tu PC con artefactos intermedios.
-- **Corrección de Bugs Críticos:** Resolución definitiva del *core-dump* inyectando el contexto de `tokio`, y arreglo del sistema de migración multimonitor adaptando el bridge Javascript puramente a la API de Wayland / KWin 6 (`workspace.outputs`).
-- **Migración Inteligente Automatizada:** El motor detecta matemáticamente cuando una pantalla se satura. Las ventanas excedentes son propulsadas a tu monitor secundario o al siguiente escritorio virtual. *(Se requiere un escritorio virtual adicional para usarse).*
-- **Control de Migración Manual:** Botones reactivos en el Plasmoid para trasladar la ventana actual entre monitores y escritorios virtuales con un clic.
+## 🌟 Nuevas Funciones y Estabilidad (v2.6+)
+- **Resiliencia y Comunicación Asíncrona:** El puente KWin-Raven ahora es completamente no bloqueante. El motor Rust utiliza offloading asíncrono con `tokio::spawn` para liberar el bus de datos instantáneamente.
+- **Gestión de Desbordamiento Inteligente:** Raven detecta matemáticamente la saturación de pantallas y escritorios. En lugar de fallos de layout, minimiza automáticamente las ventanas excedentes y lanza una notificación al usuario.
+- **Robustez en el Adaptador JavaScript:** Refactorización del bridge con manejo defensivo de errores (`try/catch`), garantizando que el entorno gráfico permanezca estable incluso ante fallos de comunicación o estados inconsistentes.
+
+### 🏗️ Arquitectura de Comunicación (High-Performance Bridge)
+El sistema utiliza un puente de baja latencia altamente desacoplado entre el compositor KWin y el motor Raven:
+- **Offloading Computacional:** El daemon en Rust delega el procesamiento de estados a hilos de trabajo asíncronos, evitando que el bus D-Bus de Plasma se sature durante cambios masivos de ventanas.
+- **Mecanismo Watchdog:** El script de KWin incorpora un temporizador de vigilancia (Watchdog) de 8 segundos para liberar bloqueos potenciales en la comunicación IPC.
+- **Protección de Memoria y Colas:** Se han implementado límites estrictos (5MB por payload y cola máxima de 200 comandos) para garantizar la estabilidad del sistema en sesiones de uso intensivo.
+- **Acciones Amigables de Almacenamiento:** Compilación nivel 3 con `strip`, `lto` y `codegen-units=1`. El instalador ahora realiza una limpieza residual profunda para optimizar el espacio en disco.
+- **Control de Migración Manual:** Botones reactivos en el Plasmoid para trasladar la ventana actual entre monitores y escritorios virtuales con un clic intuitivo.
 
 ## 🏗️ Nueva Estructura del Proyecto
 - `core/engine_rs/`: El corazón del proyecto. Un daemon nativo asíncrono que escucha al compositor KWin.

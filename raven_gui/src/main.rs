@@ -5,12 +5,21 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Configuración del motor Raven sincronizada con el archivo JSON.
+/// 
+/// Esta estructura se utiliza para la persistencia de datos y el intercambio
+/// de información entre la GUI y el daemon de Rust.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct RavenConfig {
+    /// Margen entre ventanas en píxeles.
     pub default_gaps: i32,
+    /// Estado de activación inicial del motor.
     pub tiling_enabled_on_startup: bool,
+    /// Número de ventanas en el área master.
     pub nmaster: usize,
+    /// Proporción del área maestra (0.1 a 0.9).
     pub master_ratio: f32,
+    /// Ubicación de las ventanas Picture-in-Picture.
     pub pip_position: String,
 }
 
@@ -26,9 +35,13 @@ impl Default for RavenConfig {
     }
 }
 
+/// Aplicación principal de Raven Control Center basada en eframe/egui.
 struct RavenGuiApp {
+    /// Estado de configuración actual.
     config: RavenConfig,
+    /// Ruta absoluta al archivo de configuración.
     config_path: PathBuf,
+    /// Mensaje de estado para retroalimentación visual al usuario.
     status_msg: String,
 }
 
@@ -48,6 +61,10 @@ impl RavenGuiApp {
         Self { config, config_path, status_msg: String::new() }
     }
 
+    /// Guarda la configuración actual en disco y reinicia el servicio del daemon.
+    /// 
+    /// Intenta persistir los cambios en el archivo JSON y, en caso de éxito, 
+    /// invoca a systemctl para refrescar el estado del motor en tiempo real.
     fn save_and_restart(&mut self) {
         if let Some(parent) = self.config_path.parent() {
             let _ = fs::create_dir_all(parent);
