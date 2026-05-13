@@ -5,7 +5,7 @@
 
 // Temporizador global para agrupar peticiones de sincronización (debouncing)
 var _debounceTimer = new QTimer();
-_debounceTimer.interval = 80; 
+_debounceTimer.interval = 8s0; 
 _debounceTimer.singleShot = true;
 _debounceTimer.timeout.connect(syncState);
 

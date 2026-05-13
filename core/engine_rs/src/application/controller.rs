@@ -159,15 +159,24 @@ impl RavenController {
         let mut ws_ids: Vec<String> = workspaces.keys().cloned().collect();
         ws_ids.sort();
 
-        for win in &mut windows {
+        let mut overflow_candidates = Vec::new();
+        for (idx, win) in windows.iter().enumerate() {
             if !win.is_floating && !win.is_minimized && !win.is_pip {
                 if !new_layout.contains_key(&win.window_id) {
-                    if let Some(next_ws) = ws_ids.iter().find(|&id| id != &win.workspace_id) {
-                        println!("[TOPOLOGY] Ventana {} overflow. Pre-migrando a {}.", win.window_id, next_ws);
-                        win.workspace_id = next_ws.clone();
-                        needs_second_pass = true;
-                    }
+                    overflow_candidates.push(idx);
                 }
+            }
+        }
+
+        // Medida de resiliencia: Si KWin se sobresatura al migrar múltiples ventanas,
+        // enviamos solo la última ventana (nodo) de la lista de IDs al siguiente espacio.
+        // Las demás caerán en la gestión de rechazos y serán minimizadas con seguridad.
+        if let Some(&last_idx) = overflow_candidates.last() {
+            let win = &mut windows[last_idx];
+            if let Some(next_ws) = ws_ids.iter().find(|&id| id != &win.workspace_id) {
+                println!("[TOPOLOGY] Ventana {} overflow. Pre-migrando solo la última a {}.", win.window_id, next_ws);
+                win.workspace_id = next_ws.clone();
+                needs_second_pass = true;
             }
         }
 
