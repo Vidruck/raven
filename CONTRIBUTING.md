@@ -12,7 +12,10 @@ Para mantener la robustez y ligereza logradas, todas las contribuciones deben re
 2. **Snapshot-Based Synchronization:**
    - Mantenemos el modelo de **Consistencia Eventual.** El Bridge (JS) envía el estado estructural que el daemon de Rust procesa de forma atómica para generar los comandos de posicionamiento.
 
-3. **Seguridad y Rendimiento Extremo:**
+3. **Debounced Sensing:**
+   - El Bridge no debe reaccionar instantáneamente a eventos de geometría intermedios (como durante un redimensionado manual). Debe esperar a que la interacción finalice para sincronizar el estado, protegiendo la CPU y la estabilidad de `kwin_wayland`.
+
+4. **Seguridad y Rendimiento Extremo:**
    - **Cero Costo:** Buscamos abstracciones de costo cero. Evita clonaciones innecesarias de datos en el motor.
    - **Rust Idiomático:** Favorecemos el uso de tipos seguros y el manejo de errores robusto (Result/Option). El uso de `unsafe` está estrictamente prohibido a menos que se justifique por interoperabilidad crítica con APIs de bajo nivel del sistema.
 
@@ -31,7 +34,10 @@ Para compilación y pruebas necesitas:
 
 ## 📝 Estándares de Código
 - **Rust:** Formateo obligatorio con `cargo fmt`. Se recomienda encarecidamente seguir las sugerencias de `clippy` para un código más limpio y eficiente. Documenta las funciones públicas utilizando comentarios de documentación (`///`).
-- **JavaScript (KWin):** El código del bridge debe ser compatible con el motor QJSEngine de Plasma 6 y evitar el uso de APIs obsoletas de X11 siempre que sea posible.
+- **JavaScript (Bridge):** El código debe ser compatible con `QJSEngine` de Plasma 6.
+    - **Native API First:** Prohibido el filtrado manual si existe una propiedad nativa (ej. `w.notification` vs filtrar por clase).
+    - **Inmutabilidad de IDs:** El rastreo de ventanas es exclusivo mediante `w.internalId.toString()`.
+    - **Atomicidad:** Los comandos desde Rust deben ser atómicos para evitar conflictos con el compositor.
 
 ---
 
