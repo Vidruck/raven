@@ -17,6 +17,14 @@ struct FlapTracker {
     is_penalized: bool
 }
 
+/// Registro de la última geometría ordenada por Rust para una ventana.
+struct CommandedGeometry {
+    /// Dimensiones y posición enviadas.
+    rect: Rect,
+    /// Marca de tiempo del envío.
+    timestamp: u64,
+}
+
 /// Orquestador principal de la lógica de Raven.
 /// 
 /// El `RavenController` actúa como puente entre la infraestructura IPC (D-Bus)
@@ -29,6 +37,10 @@ pub struct RavenController {
     last_known_layout: HashMap<String, Rect>,
     /// Registro para prevenir bucles infinitos de redibujado.
     flap_registry: HashMap<String, FlapTracker>,
+    /// Registro de geometrías dictadas por el motor (anti-tormenta).
+    commanded_geometries: HashMap<String, CommandedGeometry>,
+    /// Cola de migraciones solicitadas por atajos que deben procesarse en el siguiente ciclo.
+    pending_migrations: HashMap<String, String>,
 }
 
 impl RavenController {
@@ -38,7 +50,17 @@ impl RavenController {
             engine,
             last_known_layout: HashMap::new(),
             flap_registry: HashMap::new(),
+            commanded_geometries: HashMap::new(),
+            pending_migrations: HashMap::new(),
         }
+    }
+
+    /// Resetea el estado interno de la caché y los registros de defensa.
+    pub fn reset_state(&mut self) {
+        self.last_known_layout.clear();
+        self.flap_registry.clear();
+        self.commanded_geometries.clear();
+        self.pending_migrations.clear();
     }
 
     /// Indica si el motor de mosaico está habilitado actualmente.
@@ -60,7 +82,7 @@ impl RavenController {
         });
 
         if tracker.is_penalized {
-            if now - tracker.last_toggle_time > 2000 {
+            if now - tracker.last_toggle_time > 400 {
                 tracker.is_penalized = false;
                 tracker.toggle_count = 0;
             } else {
@@ -68,16 +90,16 @@ impl RavenController {
             }
         }
 
-        if now - tracker.last_toggle_time < 300 {
+        if now - tracker.last_toggle_time < 400 {
             tracker.toggle_count += 1;
-            if tracker.toggle_count > 4 {
+            if tracker.toggle_count > 8 {
                 println!("[DEFENSA] Cortocircuito activado para ventana: {}. Ignorando.", window_id);
                 tracker.is_penalized = true;
                 tracker.last_toggle_time = now;
                 return true;
             }
         } else {
-            tracker.toggle_count = 0;
+            tracker.toggle_count = 1;
         }
 
         tracker.last_toggle_time = now;
@@ -98,51 +120,107 @@ impl RavenController {
     pub fn handle_state_change(
         &mut self, 
         workspaces: HashMap<String, Rect>,
-        windows: Vec<WindowNode>
+        mut windows: Vec<WindowNode>
     ) -> Result<Vec<RavenAction>, RavenError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        // Guardar estado original de workspaces para detectar migraciones finales
+        let original_ws: HashMap<String, String> = windows.iter()
+            .map(|w| (w.window_id.clone(), w.workspace_id.clone()))
+            .collect();
+
+        // 1. Aplicar migraciones pendientes (de atajos)
+        for win in &mut windows {
+            if let Some(target) = self.pending_migrations.remove(&win.window_id) {
+                win.workspace_id = target;
+            }
+        }
 
         for win in &windows {
             if self.is_window_flapping(&win.window_id) {
                 return Ok(Vec::new());
             }
+
+            if let Some(cmd_geom) = self.commanded_geometries.get(&win.window_id) {
+                if now - cmd_geom.timestamp < 500 && win.geometry == cmd_geom.rect {
+                    return Ok(Vec::new());
+                }
+            }
         }
 
-        let new_layout = self.engine.calculate_from_payload(workspaces, windows.clone())?;
+        // 2. Cálculo inicial
+        let mut new_layout = self.engine.calculate_from_payload(workspaces.clone(), windows.clone())?;
             
-        let mut commands = Vec::new();
+        // 3. Gestor de Topología: Detección de overflow y Recálculo Predictivo
+        let mut needs_second_pass = false;
+        let mut ws_ids: Vec<String> = workspaces.keys().cloned().collect();
+        ws_ids.sort();
 
-        // 1. Detectar ventanas desbordadas por el límite del layout.
+        for win in &mut windows {
+            if !win.is_floating && !win.is_minimized && !win.is_pip {
+                if !new_layout.contains_key(&win.window_id) {
+                    if let Some(next_ws) = ws_ids.iter().find(|&id| id != &win.workspace_id) {
+                        println!("[TOPOLOGY] Ventana {} overflow. Pre-migrando a {}.", win.window_id, next_ws);
+                        win.workspace_id = next_ws.clone();
+                        needs_second_pass = true;
+                    }
+                }
+            }
+        }
+
+        if needs_second_pass {
+            new_layout = self.engine.calculate_from_payload(workspaces, windows.clone())?;
+        }
+
+        // 4. Despacho Unificado
+        let mut commands = Vec::new();
+        for (wid, rect) in &new_layout {
+            let current_win = windows.iter().find(|w| &w.window_id == wid).unwrap();
+            let orig_ws = original_ws.get(wid).unwrap();
+            
+            if &current_win.workspace_id != orig_ws {
+                // Comando transaccional MigrateAndMove
+                commands.push(RavenAction::MigrateAndMove {
+                    window_id: wid.clone(),
+                    target_ws: current_win.workspace_id.clone(),
+                    x: rect.x, y: rect.y, width: rect.width, height: rect.height
+                });
+            } else {
+                let needs_move = match self.last_known_layout.get(wid) {
+                    Some(old_rect) => old_rect != rect,
+                    None => true,
+                };
+
+                if needs_move {
+                    commands.push(RavenAction::MoveWindow {
+                        window_id: wid.clone(),
+                        x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+                    });
+                }
+            }
+
+            self.commanded_geometries.insert(wid.clone(), CommandedGeometry {
+                rect: *rect,
+                timestamp: now,
+            });
+        }
+
+        // 5. Gestión de rechazos (Overflow sin migración exitosa)
         for win in &windows {
             if !win.is_floating && !win.is_minimized && !win.is_pip {
                 if !new_layout.contains_key(&win.window_id) {
-                    println!("[CONTROLLER] Ventana {} desbordada. Solicitando migración automática.", win.window_id);
-                    commands.push(RavenAction::MigrateAuto {
+                    println!("[TOPOLOGY] Ventana {} rechazada del layout. Minimizando.", win.window_id);
+                    commands.push(RavenAction::MinimizeWindow {
                         window_id: win.window_id.clone(),
                     });
                 }
             }
         }
 
-        // 2. Generar acciones de movimiento para las ventanas dentro del layout.
-        for (wid, rect) in &new_layout {
-            let needs_move = match self.last_known_layout.get(wid) {
-                Some(old_rect) => old_rect != rect,
-                None => true,
-            };
-
-            if needs_move {
-                commands.push(RavenAction::MoveWindow {
-                    window_id: wid.clone(),
-                    x: rect.x,
-                    y: rect.y,
-                    width: rect.width,
-                    height: rect.height,
-                });
-            }
-        }
-
         self.last_known_layout = new_layout;
-
         Ok(commands)
     }
 
@@ -164,6 +242,7 @@ impl RavenController {
         action: String,
         payload: i32,
         windows: Vec<WindowNode>,
+        _workspaces: HashMap<String, Rect>,
         active_window_id: Option<String>
     ) -> Result<(bool, Vec<RavenAction>), RavenError> {
         let mut needs_recalc = false;
@@ -206,17 +285,18 @@ impl RavenController {
                     });
                 }
             },
-            "migrate_active_to_screen" => {
+            "migrate_active_to_screen" | "migrate_active_to_desktop" | "migrate_active_to_prev_screen" | "migrate_active_to_prev_desktop" => {
                 if let Some(ref wid) = active_window_id {
-                    commands.push(RavenAction::MigrateToNextScreen {
+                    let direction = match action.as_str() {
+                        "migrate_active_to_screen" => "screen_next",
+                        "migrate_active_to_prev_screen" => "screen_prev",
+                        "migrate_active_to_desktop" => "desktop_next",
+                        "migrate_active_to_prev_desktop" => "desktop_prev",
+                        _ => "screen_next",
+                    };
+                    commands.push(RavenAction::MigrateNative {
                         window_id: wid.clone(),
-                    });
-                }
-            },
-            "migrate_active_to_desktop" => {
-                if let Some(ref wid) = active_window_id {
-                    commands.push(RavenAction::MigrateToNextWorkspace {
-                        window_id: wid.clone(),
+                        direction: direction.to_string(),
                     });
                 }
             },

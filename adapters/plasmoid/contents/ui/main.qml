@@ -53,7 +53,7 @@ PlasmoidItem {
         Kirigami.Icon {
             anchors.fill: parent
             anchors.margins: Kirigami.Units.smallSpacing
-            source: "org.kde.raven.tiling"
+            source: "view-grid" // Icono genérico más orgánico para el panel
             active: root.isEngineEnabled
             opacity: root.isEngineEnabled ? 1.0 : 0.4
             
@@ -122,32 +122,28 @@ PlasmoidItem {
             GridLayout {
                 columns: 2
                 Layout.fillWidth: true
-                rowSpacing: Kirigami.Units.smallSpacing
-                columnSpacing: Kirigami.Units.smallSpacing
+                rowSpacing: Kirigami.Units.largeSpacing
+                columnSpacing: Kirigami.Units.largeSpacing
 
-                PlasmaComponents.Button {
-                    text: "Foco Anterior"
-                    icon.name: "go-previous"
+                ColumnLayout {
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("focusPrev", "")
+                    spacing: Kirigami.Units.smallSpacing
+                    PlasmaComponents.Label { text: "Foco"; Layout.alignment: Qt.AlignHCenter; opacity: 0.8; font.pixelSize: Kirigami.Units.gridUnit * 0.7 }
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        PlasmaComponents.Button { icon.name: "go-previous"; Layout.fillWidth: true; onClicked: root.execDbus("focusPrev", "") }
+                        PlasmaComponents.Button { icon.name: "go-next"; Layout.fillWidth: true; onClicked: root.execDbus("focusNext", "") }
+                    }
                 }
-                PlasmaComponents.Button {
-                    text: "Foco Siguiente"
-                    icon.name: "go-next"
+                ColumnLayout {
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("focusNext", "")
-                }
-                PlasmaComponents.Button {
-                    text: "Añadir Maestra"
-                    icon.name: "list-add"
-                    Layout.fillWidth: true
-                    onClicked: root.execDbus("incrementMaster", "")
-                }
-                PlasmaComponents.Button {
-                    text: "Quitar Maestra"
-                    icon.name: "list-remove"
-                    Layout.fillWidth: true
-                    onClicked: root.execDbus("decrementMaster", "")
+                    spacing: Kirigami.Units.smallSpacing
+                    PlasmaComponents.Label { text: "Maestras"; Layout.alignment: Qt.AlignHCenter; opacity: 0.8; font.pixelSize: Kirigami.Units.gridUnit * 0.7 }
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        PlasmaComponents.Button { icon.name: "list-remove"; Layout.fillWidth: true; onClicked: root.execDbus("decrementMaster", "") }
+                        PlasmaComponents.Button { icon.name: "list-add"; Layout.fillWidth: true; onClicked: root.execDbus("incrementMaster", "") }
+                    }
                 }
             }
 
@@ -161,32 +157,28 @@ PlasmoidItem {
             GridLayout {
                 columns: 2
                 Layout.fillWidth: true
-                rowSpacing: Kirigami.Units.smallSpacing
-                columnSpacing: Kirigami.Units.smallSpacing
+                rowSpacing: Kirigami.Units.largeSpacing
+                columnSpacing: Kirigami.Units.largeSpacing
 
-                PlasmaComponents.Button {
-                    text: "Expandir Ratio"
-                    icon.name: "view-split-left-right"
+                ColumnLayout {
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("increaseRatio", "")
+                    spacing: Kirigami.Units.smallSpacing
+                    PlasmaComponents.Label { text: "Ratio Maestro"; Layout.alignment: Qt.AlignHCenter; opacity: 0.8; font.pixelSize: Kirigami.Units.gridUnit * 0.7 }
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        PlasmaComponents.Button { icon.name: "go-previous"; Layout.fillWidth: true; onClicked: root.execDbus("decreaseRatio", "") }
+                        PlasmaComponents.Button { icon.name: "go-next"; Layout.fillWidth: true; onClicked: root.execDbus("increaseRatio", "") }
+                    }
                 }
-                PlasmaComponents.Button {
-                    text: "Reducir Ratio"
-                    icon.name: "view-split-left-right"
+                ColumnLayout {
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("decreaseRatio", "")
-                }
-                PlasmaComponents.Button {
-                    text: "Más Gaps"
-                    icon.name: "zoom-in"
-                    Layout.fillWidth: true
-                    onClicked: root.execDbus("incrementGaps", "int32:2")
-                }
-                PlasmaComponents.Button {
-                    text: "Menos Gaps"
-                    icon.name: "zoom-out"
-                    Layout.fillWidth: true
-                    onClicked: root.execDbus("incrementGaps", "int32:-2")
+                    spacing: Kirigami.Units.smallSpacing
+                    PlasmaComponents.Label { text: "Márgenes"; Layout.alignment: Qt.AlignHCenter; opacity: 0.8; font.pixelSize: Kirigami.Units.gridUnit * 0.7 }
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        PlasmaComponents.Button { icon.name: "zoom-out"; Layout.fillWidth: true; onClicked: root.execDbus("incrementGaps", "int32:-2") }
+                        PlasmaComponents.Button { icon.name: "zoom-in"; Layout.fillWidth: true; onClicked: root.execDbus("incrementGaps", "int32:2") }
+                    }
                 }
             }
 
@@ -202,24 +194,31 @@ PlasmoidItem {
             GridLayout {
                 columns: 2
                 Layout.fillWidth: true
-                rowSpacing: Kirigami.Units.smallSpacing
-                columnSpacing: Kirigami.Units.smallSpacing
+                rowSpacing: Kirigami.Units.largeSpacing
+                columnSpacing: Kirigami.Units.largeSpacing
 
-                PlasmaComponents.Button {
-                    text: "Sig. Monitor"
-                    icon.name: "video-display"
+                ColumnLayout {
                     Layout.fillWidth: true
-                    // Se deshabilita visualmente si Qt detecta 1 sola pantalla
-                    enabled: Qt.application.screens.length > 1
-                    onClicked: root.execDbus("migrateActiveToScreen", "")
+                    spacing: Kirigami.Units.smallSpacing
+                    PlasmaComponents.Label { text: "Monitor"; Layout.alignment: Qt.AlignHCenter; opacity: 0.8; font.pixelSize: Kirigami.Units.gridUnit * 0.7 }
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        PlasmaComponents.Button { icon.name: "go-previous"; Layout.fillWidth: true; enabled: Qt.application.screens.length > 1; onClicked: root.execDbus("migrateActiveToPrevScreen", "") }
+                        PlasmaComponents.Button { icon.name: "go-next"; Layout.fillWidth: true; enabled: Qt.application.screens.length > 1; onClicked: root.execDbus("migrateActiveToScreen", "") }
+                    }
                 }
-                PlasmaComponents.Button {
-                    text: "Sig. Escritorio"
-                    icon.name: "virtual-desktops"
+                ColumnLayout {
                     Layout.fillWidth: true
-                    onClicked: root.execDbus("migrateActiveToDesktop", "")
+                    spacing: Kirigami.Units.smallSpacing
+                    PlasmaComponents.Label { text: "Escritorio"; Layout.alignment: Qt.AlignHCenter; opacity: 0.8; font.pixelSize: Kirigami.Units.gridUnit * 0.7 }
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        PlasmaComponents.Button { icon.name: "go-previous"; Layout.fillWidth: true; onClicked: root.execDbus("migrateActiveToPrevDesktop", "") }
+                        PlasmaComponents.Button { icon.name: "go-next"; Layout.fillWidth: true; onClicked: root.execDbus("migrateActiveToDesktop", "") }
+                    }
                 }
             }
+
 
             Item { Layout.fillHeight: true } // Espaciador final
             

@@ -41,12 +41,14 @@ pub struct WindowNode {
     pub is_minimized: bool,
     /// Indica si la ventana está en modo Picture-in-Picture (PiP).
     pub is_pip: bool,
+    /// Geometría actual de la ventana reportada por el compositor.
+    pub geometry: Rect,
 }
 
 impl WindowNode {
     /// Crea una nueva instancia de WindowNode con sus propiedades iniciales.
-    pub fn new(window_id: String, workspace_id: String, is_floating: bool, is_minimized: bool, is_pip: bool) -> Self {
-        WindowNode { window_id, workspace_id, is_floating, is_minimized, is_pip }
+    pub fn new(window_id: String, workspace_id: String, is_floating: bool, is_minimized: bool, is_pip: bool, geometry: Rect) -> Self {
+        WindowNode { window_id, workspace_id, is_floating, is_minimized, is_pip, geometry }
     }
 }
 

@@ -57,8 +57,8 @@ El nuevo instalador gestiona la descarga de crates de Rust y la compilación opt
 3. Activa "Raven Bridge" en la configuración de KWin (Scripts de KWin).
 
 ```bash
-git clone https://github.com/Vidruck/raven
-cd raven
+git clone https://github.com/Vidruck/raven_tiling_emulator
+cd raven_tiling_emulator
 ./install.sh
 ```
 
