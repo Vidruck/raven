@@ -228,25 +228,46 @@ function applyCommands(commandsJson) {
 
             for (var j = 0; j < windows.length; j++) {
                 var w = windows[j];
+                
                 if (getSafeWindowId(w) === cmd.window_id) {
+                    
                     if (cmd.action === "move") {
                         try {
                             if (w.maximizeMode === 3 || w.interactiveMove || w.interactiveResize) break;
                             w.__raven_mutating = true;
-                            w.frameGeometry = { x: Math.round(cmd.x), y: Math.round(cmd.y), width: Math.round(cmd.width), height: Math.round(cmd.height) };
-                            setKWinTimeout(function() { try { if (w) w.__raven_mutating = false; } catch(e){} }, 100);
+                            w.frameGeometry = {
+                                x: Math.round(cmd.x), y: Math.round(cmd.y), 
+                                width: Math.round(cmd.width), height: Math.round(cmd.height) 
+                            };
+                            
+                            // [FIX] Aislamiento del scope mediante IIFE
+                            (function(capturedWindow) {
+                                setKWinTimeout(function() { 
+                                    try { if (capturedWindow) capturedWindow.__raven_mutating = false; } catch(e){} 
+                                }, 100);
+                            })(w);
+                            
                         } catch(e) { print("[Raven] Error apply move: " + e); }
+                        
                     } else if (cmd.action === "focus") {
                         try { workspace.activeWindow = w; } catch(e){}
+                        
                     } else if (cmd.action === "migrate_and_move") {
                         try {
                             w.__raven_mutating = true;
                             migrateWindow(w, cmd.target_ws);
                             w.frameGeometry = { x: Math.round(cmd.x), y: Math.round(cmd.y), width: Math.round(cmd.width), height: Math.round(cmd.height) };
-                            setKWinTimeout(function() { try { if (w) w.__raven_mutating = false; } catch(e){} }, 100);
+                            (function(capturedWindow) {
+                                setKWinTimeout(function() { 
+                                    try { if (capturedWindow) capturedWindow.__raven_mutating = false; } catch(e){} 
+                                }, 100);
+                            })(w);
+                            
                         } catch(e) { print("[Raven] Error apply migrate: " + e); }
+                        
                     } else if (cmd.action === "minimize") {
                         try { w.minimized = true; } catch(e) { print("[Raven] Error apply minimize: " + e); }
+                        
                     } else if (cmd.action === "migrate_native") {
                         try {
                             w.__raven_mutating = true;
@@ -276,7 +297,11 @@ function applyCommands(commandsJson) {
                             } else if (dir === "auto") {
                                 migrateWindowFallback(w, "auto");
                             }
-                            setKWinTimeout(function() { try { if (w) w.__raven_mutating = false; } catch(e){} }, 100);
+                            (function(capturedWindow) {
+                                setKWinTimeout(function() { 
+                                    try { if (capturedWindow) capturedWindow.__raven_mutating = false; } catch(e){} 
+                                }, 100);
+                            })(w);
                         } catch(e) { print("[Raven] Error apply migrate_native: " + e); }
                     } else if (cmd.action.indexOf("migrate") !== -1 && cmd.action !== "migrate_and_move") {
                         try {
@@ -284,7 +309,14 @@ function applyCommands(commandsJson) {
                             var strategy = (cmd.action === "migrate_to_next_screen") ? "screen" : 
                                            ((cmd.action === "migrate_to_next_workspace") ? "desktop" : "auto");
                             migrateWindowFallback(w, strategy);
-                            setKWinTimeout(function() { try { if (w) w.__raven_mutating = false; } catch(e){} }, 100);
+                            
+                            // [FIX] Aislamiento del scope mediante IIFE
+                            (function(capturedWindow) {
+                                setKWinTimeout(function() { 
+                                    try { if (capturedWindow) capturedWindow.__raven_mutating = false; } catch(e){} 
+                                }, 100);
+                            })(w);
+                            
                         } catch(e) { print("[Raven] Error apply fallback migrate: " + e); }
                     }
                     break;

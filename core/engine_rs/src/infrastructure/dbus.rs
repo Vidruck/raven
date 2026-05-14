@@ -50,6 +50,10 @@ pub struct KWinWindow {
     pub w: i32,
     /// Alto actual.
     pub h: i32,
+    #[serde(default)]
+    pub min_w:i32,
+    #[serde(default)]
+    pub min_h:i32,
 }
 
 /// Estructura raíz que contiene el estado completo del compositor.
