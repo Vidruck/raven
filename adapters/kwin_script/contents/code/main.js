@@ -9,14 +9,23 @@ _debounceTimer.interval = 60;
 _debounceTimer.singleShot = true;
 _debounceTimer.timeout.connect(syncState);
 
+// Contador global para garantizar IDs únicos e independientes de KWin
+var _raven_window_counter = 1;
+
 /**
- * Obtiene de forma segura el identificador interno de una ventana.
+ * Genera y obtiene de forma segura un identificador único para cada ventana.
+ * Independiente de si KWin agrupa los PIDs o classes.
  * @param {object} w - Objeto de ventana de KWin.
- * @returns {string|null} Identificador de la ventana como texto, o null si es inválida.
+ * @returns {string|null} Identificador único inyectado, o null si es inválida.
  */
 function getSafeWindowId(w) {
     try {
-        return (w && w.internalId) ? w.internalId.toString() : null;
+        if (!w) return null;
+        if (!w.__raven_id) {
+            w.__raven_id = "rvn_win_" + _raven_window_counter;
+            _raven_window_counter++;
+        }
+        return w.__raven_id;
     } catch (e) { return null; }
 }
 
@@ -259,14 +268,28 @@ function applyCommands(commandsJson) {
                             w.frameGeometry = { x: Math.round(cmd.x), y: Math.round(cmd.y), width: Math.round(cmd.width), height: Math.round(cmd.height) };
                             (function(capturedWindow) {
                                 setKWinTimeout(function() { 
-                                    try { if (capturedWindow) capturedWindow.__raven_mutating = false; } catch(e){} 
+                                    try { 
+                                        if (capturedWindow) capturedWindow.__raven_mutating = false; 
+                                        requestStateSync();
+                                    } catch(e){} 
                                 }, 100);
                             })(w);
                             
                         } catch(e) { print("[Raven] Error apply migrate: " + e); }
                         
                     } else if (cmd.action === "minimize") {
-                        try { w.minimized = true; } catch(e) { print("[Raven] Error apply minimize: " + e); }
+                        try {
+                            w.__raven_mutating = true;
+                            w.minimized = true;
+                            (function(capturedWindow) {
+                                setKWinTimeout(function() { 
+                                    try { 
+                                        if (capturedWindow) capturedWindow.__raven_mutating = false; 
+                                        requestStateSync();
+                                    } catch(e){} 
+                                }, 100);
+                            })(w);
+                        } catch(e) { print("[Raven] Error apply minimize: " + e); }
                         
                     } else if (cmd.action === "migrate_native") {
                         try {
@@ -299,7 +322,10 @@ function applyCommands(commandsJson) {
                             }
                             (function(capturedWindow) {
                                 setKWinTimeout(function() { 
-                                    try { if (capturedWindow) capturedWindow.__raven_mutating = false; } catch(e){} 
+                                    try { 
+                                        if (capturedWindow) capturedWindow.__raven_mutating = false; 
+                                        requestStateSync();
+                                    } catch(e){} 
                                 }, 100);
                             })(w);
                         } catch(e) { print("[Raven] Error apply migrate_native: " + e); }
@@ -313,7 +339,10 @@ function applyCommands(commandsJson) {
                             // [FIX] Aislamiento del scope mediante IIFE
                             (function(capturedWindow) {
                                 setKWinTimeout(function() { 
-                                    try { if (capturedWindow) capturedWindow.__raven_mutating = false; } catch(e){} 
+                                    try { 
+                                        if (capturedWindow) capturedWindow.__raven_mutating = false; 
+                                        requestStateSync();
+                                    } catch(e){} 
                                 }, 100);
                             })(w);
                             
@@ -378,9 +407,18 @@ function bindWindow(w) {
     try {
         if (!isManageable(w) || w.__raven_bound) return;
         w.__raven_bound = true;
-        w.minimizedChanged.connect(requestStateSync);
-        w.outputChanged.connect(requestStateSync);
-        w.desktopsChanged.connect(requestStateSync);
+        w.minimizedChanged.connect(function() {
+            if (w.__raven_mutating) return;
+            requestStateSync();
+        });
+        w.outputChanged.connect(function() {
+            if (w.__raven_mutating) return;
+            requestStateSync();
+        });
+        w.desktopsChanged.connect(function() {
+            if (w.__raven_mutating) return;
+            requestStateSync();
+        });
         
         w.frameGeometryChanged.connect(function() {
             try {
@@ -404,7 +442,34 @@ function init() {
     var initialWindows = workspace.windowList();
     for (var i=0; i<initialWindows.length; i++) bindWindow(initialWindows[i]);
 
-    workspace.windowAdded.connect(function(w) { if (isManageable(w)) { bindWindow(w); requestStateSync(); } });
+    workspace.windowAdded.connect(function(w) { 
+        if (isManageable(w)) { 
+            try {
+                // Fase 2: Pre-posicionamiento "en frío"
+                // Esto intercepta a Firefox/navegadores antes de que restauren su tamaño gigante
+                // y los obliga a nacer en un tamaño contenido (50%) para no colapsar el entorno.
+                w.__raven_mutating = true;
+                var out = w.output || workspace.activeOutput;
+                if (out) {
+                    var geo = out.geometry;
+                    w.frameGeometry = {
+                        x: geo.x + Math.round(geo.width * 0.25),
+                        y: geo.y + Math.round(geo.height * 0.25),
+                        width: Math.round(geo.width * 0.5),
+                        height: Math.round(geo.height * 0.5)
+                    };
+                }
+                (function(capturedWindow) {
+                    setKWinTimeout(function() { 
+                        try { if (capturedWindow) capturedWindow.__raven_mutating = false; } catch(e){} 
+                    }, 100);
+                })(w);
+            } catch(e) { print("[Raven] Error pre-posicionando: " + e); }
+
+            bindWindow(w); 
+            requestStateSync(); 
+        } 
+    });
     workspace.windowRemoved.connect(requestStateSync);
     workspace.windowActivated.connect(function(w) {
         if (w && isManageable(w)) {

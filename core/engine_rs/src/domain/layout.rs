@@ -75,14 +75,13 @@ pub fn calculate_master_stack(
         return layout_map;
     }
 
-    // Evitar pánico por división entre cero si nmaster es 0
-    let actual_nmaster = std::cmp::max(1, std::cmp::min(nmaster, count));
-    let has_stack = count > actual_nmaster;
-
     // Umbral mínimo de área permitido
     let min_allowed_area = (screen_rect.width as f32 * screen_rect.height as f32 * MIN_AREA_PERCENTAGE) as i32;
 
-    // Calcular el ancho de las áreas master y stack
+    // Suposición inicial
+    let mut has_stack = count > nmaster;
+
+    // Calcular el ancho de las áreas master y stack teóricas
     let master_area_width = if has_stack {
         // Sanitizar proporción para evitar geometrías corruptas o invisibles
         let safe_ratio = master_ratio.clamp(0.1, 0.9);
@@ -92,9 +91,28 @@ pub fn calculate_master_stack(
     };
     
     let stack_area_width = usable_rect.width - master_area_width;
-    let base_master_height = usable_rect.height / actual_nmaster as i32;
+
+    // Calcular capacidad predictiva (Pila Dinámica)
+    let min_height_master = std::cmp::max(1, min_allowed_area / std::cmp::max(1, master_area_width));
+    let max_masters_capacity = std::cmp::max(1, (usable_rect.height / min_height_master) as usize);
+    
+    let safe_nmaster = std::cmp::min(nmaster, max_masters_capacity);
+    let actual_nmaster = std::cmp::max(1, std::cmp::min(count, safe_nmaster));
+    
+    has_stack = count > actual_nmaster;
+
+    let max_stack_capacity = if has_stack {
+        let min_height_stack = std::cmp::max(1, min_allowed_area / std::cmp::max(1, stack_area_width));
+        (usable_rect.height / min_height_stack) as usize
+    } else {
+        0
+    };
+
+    let total_safe_capacity = actual_nmaster + max_stack_capacity;
+    let windows_to_place = std::cmp::min(count, total_safe_capacity);
 
     // Posicionar ventanas en el área Master
+    let base_master_height = usable_rect.height / actual_nmaster as i32;
     for (i, win) in active_windows.iter().take(actual_nmaster).enumerate() {
         let current_y = usable_rect.y + (i as i32 * base_master_height);
         let current_height = if i == actual_nmaster - 1 {
@@ -106,37 +124,39 @@ pub fn calculate_master_stack(
         let rect_master = Rect { x: usable_rect.x, y: current_y, width: master_area_width, height: current_height };
         let final_rect = apply_gaps(&rect_master, half_g);
         
-        // Verificar límite de desbordamiento
+        // Verificar límite de desbordamiento por seguridad
         if final_rect.width * final_rect.height >= min_allowed_area {
             layout_map.insert(win.window_id.clone(), final_rect);
         }
     }
 
-    // Posicionar el resto de las ventanas en el área Stack
-    if has_stack {
-        let stack_windows = &active_windows[actual_nmaster..];
+    // Posicionar el resto de las ventanas permitidas en el área Stack
+    if has_stack && max_stack_capacity > 0 {
+        let stack_windows = &active_windows[actual_nmaster..windows_to_place];
         let stack_count = stack_windows.len() as i32;
-        let base_stack_height = usable_rect.height / stack_count;
+        
+        if stack_count > 0 {
+            let base_stack_height = usable_rect.height / stack_count;
 
-        for (i, win) in stack_windows.iter().enumerate() {
-            let current_y = usable_rect.y + (i as i32 * base_stack_height);
-            let current_height = if i as i32 == stack_count - 1 {
-                usable_rect.height - (i as i32 * base_stack_height)
-            } else {
-                base_stack_height
-            };
+            for (i, win) in stack_windows.iter().enumerate() {
+                let current_y = usable_rect.y + (i as i32 * base_stack_height);
+                let current_height = if i as i32 == stack_count - 1 {
+                    usable_rect.height - (i as i32 * base_stack_height)
+                } else {
+                    base_stack_height
+                };
 
-            let rect_stack = Rect {
-                x: usable_rect.x + master_area_width,
-                y: current_y,
-                width: stack_area_width,
-                height: current_height,
-            };
-            let final_rect = apply_gaps(&rect_stack, half_g);
-            
-            // Verificar límite de desbordamiento
-            if final_rect.width * final_rect.height >= min_allowed_area {
-                layout_map.insert(win.window_id.clone(), final_rect);
+                let rect_stack = Rect {
+                    x: usable_rect.x + master_area_width,
+                    y: current_y,
+                    width: stack_area_width,
+                    height: current_height,
+                };
+                let final_rect = apply_gaps(&rect_stack, half_g);
+                
+                if final_rect.width * final_rect.height >= min_allowed_area {
+                    layout_map.insert(win.window_id.clone(), final_rect);
+                }
             }
         }
     }

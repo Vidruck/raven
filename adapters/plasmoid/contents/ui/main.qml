@@ -182,42 +182,7 @@ PlasmoidItem {
                 }
             }
 
-            Kirigami.Separator { Layout.fillWidth: true }
 
-            // Sección de Migración (Layout Exhaustion)
-            Kirigami.Heading {
-                text: "Migración Manual"
-                level: 4
-                opacity: 0.8
-            }
-
-            GridLayout {
-                columns: 2
-                Layout.fillWidth: true
-                rowSpacing: Kirigami.Units.largeSpacing
-                columnSpacing: Kirigami.Units.largeSpacing
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
-                    PlasmaComponents.Label { text: "Monitor"; Layout.alignment: Qt.AlignHCenter; opacity: 0.8; font.pixelSize: Kirigami.Units.gridUnit * 0.7 }
-                    RowLayout {
-                        spacing: Kirigami.Units.smallSpacing
-                        PlasmaComponents.Button { icon.name: "go-previous"; Layout.fillWidth: true; enabled: Qt.application.screens.length > 1; onClicked: root.execDbus("migrateActiveToPrevScreen", "") }
-                        PlasmaComponents.Button { icon.name: "go-next"; Layout.fillWidth: true; enabled: Qt.application.screens.length > 1; onClicked: root.execDbus("migrateActiveToScreen", "") }
-                    }
-                }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
-                    PlasmaComponents.Label { text: "Escritorio"; Layout.alignment: Qt.AlignHCenter; opacity: 0.8; font.pixelSize: Kirigami.Units.gridUnit * 0.7 }
-                    RowLayout {
-                        spacing: Kirigami.Units.smallSpacing
-                        PlasmaComponents.Button { icon.name: "go-previous"; Layout.fillWidth: true; onClicked: root.execDbus("migrateActiveToPrevDesktop", "") }
-                        PlasmaComponents.Button { icon.name: "go-next"; Layout.fillWidth: true; onClicked: root.execDbus("migrateActiveToDesktop", "") }
-                    }
-                }
-            }
 
 
             Item { Layout.fillHeight: true } // Espaciador final

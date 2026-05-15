@@ -39,7 +39,7 @@ El sistema utiliza un puente de baja latencia altamente desacoplado entre el com
 - **Uso de Identificadores Nativos:** Migración completa al uso de `internalId` y `output.geometry` de Plasma 6, eliminando desincronizaciones en configuraciones multi-monitor.
 - **Mecanismo Watchdog:** El script de KWin incorpora un temporizador de vigilancia (Watchdog) de 8 segundos para liberar bloqueos potenciales en la comunicación IPC.
 - **Acciones Amigables de Almacenamiento:** Compilación nivel 3 con `strip`, `lto` y `codegen-units=1`. El instalador ahora realiza una limpieza residual profunda.
-- **Control de Migración Manual:** Botones reactivos en el Plasmoid para trasladar la ventana actual entre monitores y escritorios virtuales.
+
 
 ## 🏗️ Nueva Estructura del Proyecto
 - `core/engine_rs/`: El corazón del proyecto. Un daemon nativo asíncrono que escucha al compositor KWin.

@@ -41,6 +41,8 @@ pub struct RavenController {
     commanded_geometries: HashMap<String, CommandedGeometry>,
     /// Cola de migraciones solicitadas por atajos que deben procesarse en el siguiente ciclo.
     pending_migrations: HashMap<String, String>,
+    /// Historial de prioridad de ventanas visibles (para Pila LIFO estable).
+    visible_windows_order: Vec<String>,
 }
 
 impl RavenController {
@@ -52,6 +54,7 @@ impl RavenController {
             flap_registry: HashMap::new(),
             commanded_geometries: HashMap::new(),
             pending_migrations: HashMap::new(),
+            visible_windows_order: Vec::new(),
         }
     }
 
@@ -61,6 +64,7 @@ impl RavenController {
         self.flap_registry.clear();
         self.commanded_geometries.clear();
         self.pending_migrations.clear();
+        self.visible_windows_order.clear();
     }
 
     /// Indica si el motor de mosaico está habilitado actualmente.
@@ -139,50 +143,46 @@ impl RavenController {
             }
         }
 
-        for win in &windows {
-            if self.is_window_flapping(&win.window_id) {
-                return Ok(Vec::new());
-            }
-
-            if let Some(cmd_geom) = self.commanded_geometries.get(&win.window_id) {
-                if now - cmd_geom.timestamp < 500 && win.geometry == cmd_geom.rect {
-                    return Ok(Vec::new());
-                }
+        // Filtramos las ventanas que están "rebotando" para no congelar todo el escritorio.
+        // Si una ventana falla (como un MinimizeWindow rechazado), solo esa ventana se ignora.
+        let mut healthy_windows = Vec::new();
+        for win in windows {
+            if !self.is_window_flapping(&win.window_id) {
+                healthy_windows.push(win);
             }
         }
+        let mut windows = healthy_windows;
+
+        // 1.5. Mantenimiento del Orden de Pila LIFO
+        // Identificamos las ventanas que están visibles actualmente
+        let current_visible: Vec<String> = windows.iter()
+            .filter(|w| !w.is_floating && !w.is_minimized)
+            .map(|w| w.window_id.clone())
+            .collect();
+
+        // Limpiamos las que ya no están visibles
+        self.visible_windows_order.retain(|id| current_visible.contains(id));
+
+        // Insertamos las nuevas (o recién desminimizadas) al final de la cola (Stack / Menor prioridad)
+        // Esto mantiene a las ventanas más antiguas seguras en su posición Master.
+        for vid in &current_visible {
+            if !self.visible_windows_order.contains(vid) {
+                self.visible_windows_order.push(vid.clone());
+            }
+        }
+
+        // Ordenamos el array `windows` según nuestro `visible_windows_order`.
+        // Las ventanas no visibles (minimizadas/flotantes) se van al final.
+        windows.sort_by_key(|w| {
+            self.visible_windows_order.iter().position(|id| id == &w.window_id).unwrap_or(usize::MAX)
+        });
 
         // 2. Cálculo inicial
-        let mut new_layout = self.engine.calculate_from_payload(workspaces.clone(), windows.clone())?;
+        let new_layout = self.engine.calculate_from_payload(workspaces.clone(), windows.clone())?;
             
-        // 3. Gestor de Topología: Detección de overflow y Recálculo Predictivo
-        let mut needs_second_pass = false;
-        let mut ws_ids: Vec<String> = workspaces.keys().cloned().collect();
-        ws_ids.sort();
-
-        let mut overflow_candidates = Vec::new();
-        for (idx, win) in windows.iter().enumerate() {
-            if !win.is_floating && !win.is_minimized && !win.is_pip {
-                if !new_layout.contains_key(&win.window_id) {
-                    overflow_candidates.push(idx);
-                }
-            }
-        }
-
-        // Medida de resiliencia: Si KWin se sobresatura al migrar múltiples ventanas,
-        // enviamos solo la última ventana (nodo) de la lista de IDs al siguiente espacio.
-        // Las demás caerán en la gestión de rechazos y serán minimizadas con seguridad.
-        if let Some(&last_idx) = overflow_candidates.last() {
-            let win = &mut windows[last_idx];
-            if let Some(next_ws) = ws_ids.iter().find(|&id| id != &win.workspace_id) {
-                println!("[TOPOLOGY] Ventana {} overflow. Pre-migrando solo la última a {}.", win.window_id, next_ws);
-                win.workspace_id = next_ws.clone();
-                needs_second_pass = true;
-            }
-        }
-
-        if needs_second_pass {
-            new_layout = self.engine.calculate_from_payload(workspaces, windows.clone())?;
-        }
+        // 3. Gestor de Topología: Detección de overflow predictiva gestionada en layout.rs
+        // Las ventanas que no quepan en la geometría segura caerán automáticamente
+        // en la fase de rechazo (Pila LIFO) y serán minimizadas sin forzar migraciones.
 
         // 4. Despacho Unificado
         let mut commands = Vec::new();
@@ -217,11 +217,13 @@ impl RavenController {
             });
         }
 
-        // 5. Gestión de rechazos (Overflow sin migración exitosa)
+        // 5. Gestión de rechazos (Overflow sin espacio en layout)
+        // La migración nativa de ventanas recién creadas ("a lo loco") corrompe el puente en Wayland.
+        // Solución definitiva y estable: Minimizamos todas las ventanas sobrantes (Pila LIFO pura).
         for win in &windows {
             if !win.is_floating && !win.is_minimized && !win.is_pip {
                 if !new_layout.contains_key(&win.window_id) {
-                    println!("[TOPOLOGY] Ventana {} rechazada del layout. Minimizando.", win.window_id);
+                    println!("[TOPOLOGY] Ventana {} rechazada. Minimizando en pila local.", win.window_id);
                     commands.push(RavenAction::MinimizeWindow {
                         window_id: win.window_id.clone(),
                     });
