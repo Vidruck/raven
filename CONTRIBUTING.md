@@ -19,6 +19,9 @@ Para mantener la robustez y ligereza logradas, todas las contribuciones deben re
    - **Cero Costo:** Buscamos abstracciones de costo cero. Evita clonaciones innecesarias de datos en el motor.
    - **Rust Idiomático:** Favorecemos el uso de tipos seguros y el manejo de errores robusto (Result/Option). El uso de `unsafe` está estrictamente prohibido a menos que se justifique por interoperabilidad crítica con APIs de bajo nivel del sistema.
 
+5. **Optimización de Peso (Binary Thinning):**
+   - El minimalismo en el binario final es un requisito de diseño. Se exige a los colaboradores buscar la reducción máxima del peso en ROM, evaluando críticamente la inclusión de dependencias y sus features. El objetivo es mantener el footprint lo más bajo posible para el usuario final.
+
 ## 🚀 Cómo colaborar
 1. **Reporte de Bugs:** Si encuentras un comportamiento extraño en Wayland, abre un *Issue* describiendo tu hardware, versión de Plasma y adjunta los logs del daemon si es posible (`journalctl --user -u raven`).
 2. **Pull Requests:**

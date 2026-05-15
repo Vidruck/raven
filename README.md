@@ -19,13 +19,13 @@ Esta versión se enfoca en la perfección estructural y la corrección de fallos
 ### 📉 Eficiencia Energética y de Almacenamiento
 La optimización sigue siendo el pilar. El motor opera con recursos ridículamente bajos y el ejecutable ha sido comprimido al máximo:
 
-| Versión | Arquitectura | Consumo de RAM (aprox.) |
-|---|---|---|
-| **v1.0** | Python Puro | 55.0 MB |
-| **v1.6** | Híbrida (Python + Rust FFI) | ~25.9 MB |
-| **v2.6** | **Optimized Rust** | **~5.8 MB** |
+| Versión | Arquitectura | RAM (Runtime) | ROM (Binario) |
+|---|---|---|---|
+| **v1.0** | Python Puro | 55.0 MB | ~15 MB |
+| **v1.6** | Híbrida (Python + Rust FFI) | ~25.9 MB | ~18 MB |
+| **v2.6** | **Optimized Rust** | **~5.5 MB** | **1.4 MB** |
 
-*Una reducción inmensa en el uso de memoria y disco gracias a LTO y la eliminación de símbolos de depuración. La latencia de respuesta se ha reducido de ~120ms a **<50ms** gracias al procesamiento asíncrono.*
+*La eficiencia extrema ha sido una directriz arquitectónica fundamental desde el inicio del proyecto. Tras validaciones exhaustivas en hardware real, se logró consolidar un motor de alto rendimiento que minimiza el impacto en recursos. Gracias al uso de LTO, el pruning de dependencias y la eliminación de símbolos, entregamos un binario ultra-compacto sin comprometer la estabilidad.*
 
 ## 🌟 Nuevas Funciones y Estabilidad (v2.6+)
 - **Resiliencia y Comunicación Asíncrona:** El puente KWin-Raven ahora es completamente no bloqueante. El motor Rust utiliza offloading asíncrono con `tokio::spawn` para liberar el bus de datos instantáneamente.

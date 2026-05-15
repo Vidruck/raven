@@ -6,8 +6,8 @@ members = [
 resolver = "2"
 
 [profile.release]
-# Optimización de nivel 3 (máxima velocidad)
-opt-level = 3
+# Optimización de nivel "z" (optimizar para tamaño mínimo)
+opt-level = "z"
 
 # Elimina todos los símbolos de depuración del binario final para reducir tamaño
 strip = true
