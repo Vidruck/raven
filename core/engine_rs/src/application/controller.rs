@@ -66,6 +66,8 @@ impl RavenController {
         self.commanded_geometries.clear();
         self.pending_migrations.clear();
         self.visible_windows_order.clear();
+        self.engine.current_workspaces.clear();
+        self.engine.current_windows.clear();
     }
 
     /// Indica si el motor de mosaico está habilitado actualmente.
@@ -133,6 +135,9 @@ impl RavenController {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
+
+        self.engine.current_workspaces = workspaces.clone();
+        self.engine.current_windows = windows.iter().map(|w| (w.window_id.clone(), w.clone())).collect();
 
         self.engine.update_history(&windows);
 
@@ -231,6 +236,16 @@ impl RavenController {
 
         self.last_known_layout = new_layout;
         Ok(commands)
+    }
+
+    /// Procesa una actualizacion diferencial de una ventana especifica (Delta Sync).
+    pub fn handle_delta_change(&mut self, win: WindowNode) -> Result<Vec<RavenAction>, RavenError> {
+        self.engine.current_windows.insert(win.window_id.clone(), win);
+
+        let workspaces = self.engine.current_workspaces.clone();
+        let windows: Vec<WindowNode> = self.engine.current_windows.values().cloned().collect();
+
+        self.handle_state_change(workspaces, windows)
     }
 
     /// Procesa una acción disparada por un atajo de teclado del usuario.

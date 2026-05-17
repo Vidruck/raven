@@ -10,21 +10,21 @@ use crate::domain::error::RavenError;
 /// Mantiene la configuración activa, el estado global de habilitación y
 /// el historial cronológico de ventanas utilizado en la evicción FIFO.
 pub struct TilingEngine {
-    /// Configuración de preferencias (márgenes, proporciones, etc.).
     pub config: RavenConfig,
-    /// Estado operativo actual del motor.
     pub is_tiling_enabled: bool,
-    /// Historial cronológico de identificadores de ventanas para evicción FIFO.
     pub window_history: VecDeque<String>, 
+    pub current_workspaces: HashMap<String, Rect>,
+    pub current_windows: HashMap<String, WindowNode>,
 }
 
 impl TilingEngine {
-    /// Inicializa un motor de mosaico con una configuración predeterminada.
     pub fn new(config: RavenConfig) -> Self {
         TilingEngine {
             is_tiling_enabled: config.tiling_enabled_on_startup,
             config,
             window_history: VecDeque::new(),
+            current_workspaces: HashMap::new(),
+            current_windows: HashMap::new(),
         }
     }
 

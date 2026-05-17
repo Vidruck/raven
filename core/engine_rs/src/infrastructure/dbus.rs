@@ -261,6 +261,41 @@ impl RavenDBusService {
         });
     }
 
+    /// Sincronización Diferencial: Actualiza solo una ventana específica
+    #[zbus(name = "syncWindowDelta")]
+    async fn sync_window_delta(&self, delta_json: String) {
+        let controller_clone = Arc::clone(&self.controller);
+        let pending_clone = Arc::clone(&self.pending_commands);
+
+        self.tokio_handle.spawn(async move {
+            if let Ok(win) = serde_json::from_str::<KWinWindow>(&delta_json) {
+                let win_node = WindowNode::new(
+                    win.id,
+                    win.ws,
+                    win.output,
+                    win.desktops,
+                    win.f,
+                    win.m,
+                    win.p,
+                    Rect::new(win.x, win.y, win.w, win.h),
+                );
+
+                let mut ctrl = controller_clone.lock().await;
+                match ctrl.handle_delta_change(win_node) {
+                    Ok(commands) => {
+                        let mut queue = pending_clone.lock().await;
+                        let dbus_commands: Vec<TilingCommand> =
+                            commands.into_iter().map(Into::into).collect();
+                        queue.extend(dbus_commands);
+                    }
+                    Err(e) => {
+                        eprintln!("[ENGINE ERROR] Fallo al procesar delta change: {}", e);
+                    }
+                }
+            }
+        });
+    }
+
     /// Notifica que el bridge está listo para operar (handshake inicial).
     /// Limpia comandos pendientes y resetea el estado del controlador.
     #[zbus(name = "bridgeReady")]

@@ -167,6 +167,44 @@ function syncState() {
 }
 
 /**
+ * Envía un Delta: Solo la ventana que acaba de mutar.
+ * Extremadamente amigable con el Recolector de Basura.
+ * @param {object} w - Ventana que mutó.
+ */
+function syncWindowDelta(w) {
+    try {
+        if (!w || w.deleted || !isManageable(w) || w.__raven_quarantined) return;
+        var safeId = getSafeWindowId(w);
+        if (!safeId) return;
+
+        var output = w.output || workspace.activeOutput;
+        var outName = output ? output.name : "default";
+
+        var deskIds = [];
+        if (w.desktops) {
+            for (var d = 0; d < w.desktops.length; d++) {
+                deskIds.push(w.desktops[d].id.toString());
+            }
+        }
+
+        var geom = w.frameGeometry;
+        var deltaPayload = {
+            id: safeId,
+            ws: getWorkspaceId(w),
+            output: outName,
+            desktops: deskIds,
+            f: isFloating(w),
+            m: Boolean(w.minimized),
+            p: Boolean(w.keepAbove),
+            x: Math.round(geom.x), y: Math.round(geom.y),
+            w: Math.round(geom.width), h: Math.round(geom.height)
+        };
+
+        callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "syncWindowDelta", JSON.stringify(deltaPayload));
+    } catch (e) { print("[Raven] Error Delta Sync: " + e); }
+}
+
+/**
  * Migra una ventana hacia otra pantalla o escritorio virtual, o la minimiza si no hay espacio.
  * @param {object} win - Objeto de ventana de KWin a migrar.
  * @param {string} target_ws - Espacio de trabajo destino explícito.
@@ -549,7 +587,7 @@ function bindWindow(w) {
                         return; 
                     }
 
-                    requestStateSync();
+                    syncWindowDelta(w);
                 } catch(e) { print("[Raven] Error frameGeometryChanged callback: " + e); }
             });
         } catch(e) { print("[Raven] Error connecting frameGeometryChanged: " + e); }
