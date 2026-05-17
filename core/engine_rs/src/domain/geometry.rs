@@ -35,6 +35,10 @@ pub struct WindowNode {
     pub window_id: String,
     /// Identificador del escritorio o actividad donde se encuentra la ventana.
     pub workspace_id: String,
+    /// Identificador del monitor físico.
+    pub output: String,
+    /// Identificadores de todos los escritorios virtuales asociados a la ventana.
+    pub desktops: Vec<String>,
     /// Indica si la ventana está en modo flotante.
     pub is_floating: bool,
     /// Indica si la ventana está minimizada.
@@ -47,8 +51,26 @@ pub struct WindowNode {
 
 impl WindowNode {
     /// Crea una nueva instancia de WindowNode con sus propiedades iniciales.
-    pub fn new(window_id: String, workspace_id: String, is_floating: bool, is_minimized: bool, is_pip: bool, geometry: Rect) -> Self {
-        WindowNode { window_id, workspace_id, is_floating, is_minimized, is_pip, geometry }
+    pub fn new(
+        window_id: String,
+        workspace_id: String,
+        output: String,
+        desktops: Vec<String>,
+        is_floating: bool,
+        is_minimized: bool,
+        is_pip: bool,
+        geometry: Rect,
+    ) -> Self {
+        WindowNode {
+            window_id,
+            workspace_id,
+            output,
+            desktops,
+            is_floating,
+            is_minimized,
+            is_pip,
+            geometry,
+        }
     }
 }
 

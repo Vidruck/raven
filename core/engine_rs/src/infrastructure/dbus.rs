@@ -33,6 +33,12 @@ pub struct KWinWindow {
     /// Identificador del escritorio virtual (Workspace).
     #[serde(default)]
     pub ws: String,
+    /// Identificador de monitores
+    #[serde(default)]
+    pub output: String,
+    /// Identificador de Escritorios Virtuales
+    #[serde(default)]
+    pub desktops: Vec<String>,
     /// Indica si la ventana es flotante.
     #[serde(default)]
     pub f: bool,
@@ -90,6 +96,8 @@ fn parse_payload(
         windows.push(WindowNode::new(
             win.id,
             win.ws,
+            win.output,
+            win.desktops,
             win.f,
             win.m,
             win.p,
@@ -132,71 +140,25 @@ pub struct TilingCommand {
 }
 
 impl From<RavenAction> for TilingCommand {
-    /// Convierte una acción de dominio abstracta en un comando concreto para el bridge.
     fn from(action: RavenAction) -> Self {
         match action {
-            RavenAction::MoveWindow {
-                window_id,
-                x,
-                y,
-                width,
-                height,
-            } => TilingCommand {
-                action: "move".to_string(),
-                window_id: Some(window_id),
-                x: Some(x),
-                y: Some(y),
-                width: Some(width),
-                height: Some(height),
-                target_ws: None,
-                direction: None,
+            RavenAction::MoveWindow { window_id, x, y, width, height } => TilingCommand {
+                action: "move".to_string(), window_id: Some(window_id), x: Some(x), y: Some(y), width: Some(width), height: Some(height), target_ws: None, direction: None,
             },
             RavenAction::FocusWindow { window_id } => TilingCommand {
-                action: "focus".to_string(),
-                window_id: Some(window_id),
-                x: None,
-                y: None,
-                width: None,
-                height: None,
-                target_ws: None,
-                direction: None,
+                action: "focus".to_string(), window_id: Some(window_id), x: None, y: None, width: None, height: None, target_ws: None, direction: None,
             },
-            RavenAction::MigrateAndMove {
-                window_id,
-                target_ws,
-                x,
-                y,
-                width,
-                height,
-            } => TilingCommand {
-                action: "migrate_and_move".to_string(),
-                window_id: Some(window_id),
-                x: Some(x),
-                y: Some(y),
-                width: Some(width),
-                height: Some(height),
-                target_ws: Some(target_ws),
-                direction: None,
+            RavenAction::MigrateToOutput { window_id, target_output } => TilingCommand {
+                action: "migrate_to_output".to_string(), window_id: Some(window_id), target_ws: Some(target_output), x: None, y: None, width: None, height: None, direction: None,
+            },
+            RavenAction::MigrateToDesktop { window_id, target_desktop } => TilingCommand {
+                action: "migrate_to_desktop".to_string(), window_id: Some(window_id), target_ws: Some(target_desktop), x: None, y: None, width: None, height: None, direction: None,
             },
             RavenAction::MinimizeWindow { window_id } => TilingCommand {
-                action: "minimize".to_string(),
-                window_id: Some(window_id),
-                x: None,
-                y: None,
-                width: None,
-                height: None,
-                target_ws: None,
-                direction: None,
+                action: "minimize".to_string(), window_id: Some(window_id), x: None, y: None, width: None, height: None, target_ws: None, direction: None,
             },
-            RavenAction::MigrateNative { window_id, direction } => TilingCommand {
-                action: "migrate_native".to_string(),
-                window_id: Some(window_id),
-                x: None,
-                y: None,
-                width: None,
-                height: None,
-                target_ws: None,
-                direction: Some(direction),
+            RavenAction::UnminimizeWindow { window_id } => TilingCommand {
+                action: "unminimize".to_string(), window_id: Some(window_id), x: None, y: None, width: None, height: None, target_ws: None, direction: None,
             },
         }
     }

@@ -46,7 +46,7 @@ pub fn calculate_master_stack(
     nmaster: usize,
     master_ratio: f32,
     default_gaps: i32,
-) -> HashMap<String, Rect> {
+) -> (HashMap<String, Rect>, Vec<String>) {
     
     // Filtrar solo las ventanas que deben ser organizadas (no flotantes ni minimizadas)
     let active_windows: Vec<&WindowNode> = windows.iter()
@@ -55,8 +55,9 @@ pub fn calculate_master_stack(
 
     let count = active_windows.len();
     let mut layout_map = HashMap::with_capacity(count);
+    let mut evicted_windows = Vec::new();
 
-    if count == 0 { return layout_map; }
+    if count == 0 { return (layout_map, evicted_windows); }
 
     let g = default_gaps;
     let half_g = g / 2;
@@ -71,8 +72,14 @@ pub fn calculate_master_stack(
 
     // Si solo hay una ventana, ocupa toda la pantalla (con gaps)
     if count == 1 {
-        layout_map.insert(active_windows[0].window_id.clone(), apply_gaps(&screen_rect, g));
-        return layout_map;
+        let final_rect = apply_gaps(&screen_rect, g);
+        let min_allowed_area = (screen_rect.width as f32 * screen_rect.height as f32 * MIN_AREA_PERCENTAGE) as i32;
+        if final_rect.width * final_rect.height >= min_allowed_area {
+            layout_map.insert(active_windows[0].window_id.clone(), final_rect);
+        } else {
+            evicted_windows.push(active_windows[0].window_id.clone());
+        }
+        return (layout_map, evicted_windows);
     }
 
     // Umbral mínimo de área permitido
@@ -111,6 +118,13 @@ pub fn calculate_master_stack(
     let total_safe_capacity = actual_nmaster + max_stack_capacity;
     let windows_to_place = std::cmp::min(count, total_safe_capacity);
 
+    // Las ventanas que queden fuera del total_safe_capacity se consideran desalojadas automáticamente
+    if count > total_safe_capacity {
+        for win in active_windows.iter().skip(total_safe_capacity) {
+            evicted_windows.push(win.window_id.clone());
+        }
+    }
+
     // Posicionar ventanas en el área Master
     let base_master_height = usable_rect.height / actual_nmaster as i32;
     for (i, win) in active_windows.iter().take(actual_nmaster).enumerate() {
@@ -127,6 +141,8 @@ pub fn calculate_master_stack(
         // Verificar límite de desbordamiento por seguridad
         if final_rect.width * final_rect.height >= min_allowed_area {
             layout_map.insert(win.window_id.clone(), final_rect);
+        } else {
+            evicted_windows.push(win.window_id.clone());
         }
     }
 
@@ -156,12 +172,14 @@ pub fn calculate_master_stack(
                 
                 if final_rect.width * final_rect.height >= min_allowed_area {
                     layout_map.insert(win.window_id.clone(), final_rect);
+                } else {
+                    evicted_windows.push(win.window_id.clone());
                 }
             }
         }
     }
 
-    layout_map
+    (layout_map, evicted_windows)
 }
 
 /// Calcula la topología global de todas las ventanas en todos los escritorios.
@@ -179,7 +197,7 @@ pub fn calculate_master_stack(
 /// * `pip_position` - Posición deseada para las ventanas PiP ("top-left", "top-right", etc.).
 ///
 /// # Retorno
-/// Un `HashMap` con la geometría final de todas las ventanas visibles.
+/// Una tupla: (Geometrías Calculadas, IDs de Ventanas Desalojadas)
 pub fn calculate_global_topology(
     windows: Vec<WindowNode>,
     workspaces: HashMap<String, Rect>,
@@ -187,8 +205,9 @@ pub fn calculate_global_topology(
     master_ratio: f32,
     default_gaps: i32,
     pip_position: &str,
-) -> HashMap<String, Rect> {
+) -> (HashMap<String, Rect>, Vec<String>) {
     let mut global_layout = HashMap::new();
+    let mut global_evicted = Vec::new();
     let mut windows_by_ws: HashMap<String, Vec<WindowNode>> = HashMap::new();
     
     // Agrupar ventanas por su escritorio (workspace) correspondiente
@@ -205,7 +224,7 @@ pub fn calculate_global_topology(
     for (ws_id, ws_windows) in windows_by_ws {
         if let Some(screen_rect) = workspaces.get(&ws_id) {
             // Primero calculamos el layout base (Master-Stack)
-            let ws_layout = calculate_master_stack(
+            let (ws_layout, ws_evicted) = calculate_master_stack(
                 ws_windows.clone(),
                 *screen_rect,
                 nmaster,
@@ -213,6 +232,7 @@ pub fn calculate_global_topology(
                 default_gaps,
             );
             global_layout.extend(ws_layout);
+            global_evicted.extend(ws_evicted);
 
             // Dimensiones para ventanas PiP (aproximadamente 22% del ancho de pantalla)
             let pip_w = (screen_rect.width as f32 * 0.22) as i32;
@@ -245,5 +265,82 @@ pub fn calculate_global_topology(
             }
         }
     }   
-    global_layout
+    (global_layout, global_evicted)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::geometry::{Rect, WindowNode};
+
+    fn mock_window(id: &str) -> WindowNode {
+        WindowNode::new(
+            id.to_string(),
+            "workspace_1".to_string(),
+            "DP-1".to_string(),
+            vec!["desktop_1".to_string()],
+            false,
+            false,
+            false,
+            Rect::new(0, 0, 0, 0),
+        )
+    }
+
+    #[test]
+    fn test_calculo_vacio_retorna_limpio() {
+        // [Escenario]: El puente envía un arreglo vacío (escritorio sin ventanas)
+        let (layout, evicted) = calculate_master_stack(
+            vec![], 
+            Rect::new(0, 0, 1920, 1080), 
+            1, 
+            0.5, 
+            10
+        );
+        
+        // [Validación]: El motor no debe crashear, debe devolver colecciones vacías
+        assert!(layout.is_empty(), "El layout debería estar vacío");
+        assert!(evicted.is_empty(), "No debería haber ventanas desalojadas");
+    }
+
+    #[test]
+    fn test_ventana_unica_respeta_gaps() {
+        // [Escenario]: Una sola ventana en una pantalla 1080p con gaps de 20px
+        let windows = vec![mock_window("win_1")];
+        let screen = Rect::new(0, 0, 1920, 1080);
+        let gaps = 20;
+
+        let (layout, evicted) = calculate_master_stack(windows, screen, 1, 0.5, gaps);
+
+        // [Validación]: La ventana no debe ser desalojada y debe aplicar el gap perimetral
+        assert!(evicted.is_empty());
+        let rect = layout.get("win_1").expect("La ventana 1 debería estar en el layout");
+        
+        // Si el gap es 20, la ventana debe estar en (20, 20) y su tamaño reducirse en 2 * gap (40px)
+        assert_eq!(rect.x, 20);
+        assert_eq!(rect.y, 20);
+        assert_eq!(rect.width, 1880); // 1920 - 40
+        assert_eq!(rect.height, 1040); // 1080 - 40
+    }
+
+    #[test]
+    fn test_resiliencia_desbordamiento_fifo() {
+        // [Escenario Estrés]: Intentamos meter 20 ventanas en 1080p.
+        // Dado que MIN_AREA_PERCENTAGE es 0.08 (8%), matemáticamente solo caben
+        // un máximo de 12 ventanas (100% / 8% = 12.5). El resto DEBE ser desalojado.
+        let mut windows = Vec::new();
+        for i in 0..20 {
+            windows.push(mock_window(&format!("win_{}", i)));
+        }
+
+        let screen = Rect::new(0, 0, 1920, 1080);
+        let (layout, evicted) = calculate_master_stack(windows, screen, 1, 0.5, 10);
+
+        // [Validación]: Comprobamos que el motor protege la legibilidad de la pantalla
+        assert!(layout.len() <= 12, "El layout aceptó más ventanas de las matemáticamente posibles");
+        assert!(evicted.len() >= 8, "El motor no desalojó las ventanas sobrantes");
+        
+        // Verificamos que no haya superposición lógica entre admitidas y desalojadas
+        for id in evicted {
+            assert!(!layout.contains_key(&id), "Una ventana desalojada apareció en el layout");
+        }
+    }
 }

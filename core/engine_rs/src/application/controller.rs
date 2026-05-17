@@ -18,6 +18,7 @@ struct FlapTracker {
 }
 
 /// Registro de la última geometría ordenada por Rust para una ventana.
+#[allow(dead_code)]
 struct CommandedGeometry {
     /// Dimensiones y posición enviadas.
     rect: Rect,
@@ -110,41 +111,31 @@ impl RavenController {
         false
     }
 
-    /// Maneja un cambio de estado masivo en el sistema (ventanas añadidas, movidas o cerradas).
+    /// Procesa los cambios de estado reportados por el compositor para calcular
+    /// y aplicar el layout correspondiente a las ventanas del sistema.
     /// 
-    /// Procesa el estado actual del compositor y genera una lista de acciones de 
-    /// dominio para sincronizar KWin con la topología calculada.
+    /// Filtra ventanas inestables mediante el registro de rebotes, organiza las
+    /// ventanas de acuerdo con el historial cronológico y ejecuta la lógica de
+    /// resiliencia en cascada para cualquier ventana desalojada.
     /// 
     /// # Parámetros
-    /// * `workspaces` - Mapa de áreas de trabajo disponibles.
-    /// * `windows` - Listado de nodos de ventana detectados.
+    /// * `workspaces` - Colección de áreas de trabajo físicas y virtuales.
+    /// * `windows` - Listado de nodos de ventana a diagramar.
     /// 
-    /// # Retorno
-    /// Un vector de `RavenAction` con las operaciones a realizar en la infraestructura.
+    /// # Retornos
+    /// Lista de acciones de dominio a ejecutar por la infraestructura de KWin.
     pub fn handle_state_change(
         &mut self, 
         workspaces: HashMap<String, Rect>,
-        mut windows: Vec<WindowNode>
+        windows: Vec<WindowNode>
     ) -> Result<Vec<RavenAction>, RavenError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
 
-        // Guardar estado original de workspaces para detectar migraciones finales
-        let original_ws: HashMap<String, String> = windows.iter()
-            .map(|w| (w.window_id.clone(), w.workspace_id.clone()))
-            .collect();
+        self.engine.update_history(&windows);
 
-        // 1. Aplicar migraciones pendientes (de atajos)
-        for win in &mut windows {
-            if let Some(target) = self.pending_migrations.remove(&win.window_id) {
-                win.workspace_id = target;
-            }
-        }
-
-        // Filtramos las ventanas que están "rebotando" para no congelar todo el escritorio.
-        // Si una ventana falla (como un MinimizeWindow rechazado), solo esa ventana se ignora.
         let mut healthy_windows = Vec::new();
         for win in windows {
             if !self.is_window_flapping(&win.window_id) {
@@ -153,62 +144,27 @@ impl RavenController {
         }
         let mut windows = healthy_windows;
 
-        // 1.5. Mantenimiento del Orden de Pila LIFO
-        // Identificamos las ventanas que están visibles actualmente
-        let current_visible: Vec<String> = windows.iter()
-            .filter(|w| !w.is_floating && !w.is_minimized)
-            .map(|w| w.window_id.clone())
-            .collect();
-
-        // Limpiamos las que ya no están visibles
-        self.visible_windows_order.retain(|id| current_visible.contains(id));
-
-        // Insertamos las nuevas (o recién desminimizadas) al final de la cola (Stack / Menor prioridad)
-        // Esto mantiene a las ventanas más antiguas seguras en su posición Master.
-        for vid in &current_visible {
-            if !self.visible_windows_order.contains(vid) {
-                self.visible_windows_order.push(vid.clone());
-            }
-        }
-
-        // Ordenamos el array `windows` según nuestro `visible_windows_order`.
-        // Las ventanas no visibles (minimizadas/flotantes) se van al final.
         windows.sort_by_key(|w| {
-            self.visible_windows_order.iter().position(|id| id == &w.window_id).unwrap_or(usize::MAX)
+            self.engine.window_history.iter().position(|id| id == &w.window_id).unwrap_or(usize::MAX)
         });
 
-        // 2. Cálculo inicial
-        let new_layout = self.engine.calculate_from_payload(workspaces.clone(), windows.clone())?;
-            
-        // 3. Gestor de Topología: Detección de overflow predictiva gestionada en layout.rs
-        // Las ventanas que no quepan en la geometría segura caerán automáticamente
-        // en la fase de rechazo (Pila LIFO) y serán minimizadas sin forzar migraciones.
+        let (new_layout, evicted_windows) = self.engine.calculate_from_payload(workspaces.clone(), windows.clone())?;
 
-        // 4. Despacho Unificado
         let mut commands = Vec::new();
         for (wid, rect) in &new_layout {
-            let current_win = windows.iter().find(|w| &w.window_id == wid).unwrap();
-            let orig_ws = original_ws.get(wid).unwrap();
-            
-            if &current_win.workspace_id != orig_ws {
-                // Comando transaccional MigrateAndMove
-                commands.push(RavenAction::MigrateAndMove {
-                    window_id: wid.clone(),
-                    target_ws: current_win.workspace_id.clone(),
-                    x: rect.x, y: rect.y, width: rect.width, height: rect.height
-                });
-            } else {
-                let needs_move = match self.last_known_layout.get(wid) {
-                    Some(old_rect) => old_rect != rect,
-                    None => true,
-                };
+            let needs_move = match self.last_known_layout.get(wid) {
+                Some(old_rect) => old_rect != rect,
+                None => true,
+            };
 
-                if needs_move {
-                    commands.push(RavenAction::MoveWindow {
-                        window_id: wid.clone(),
-                        x: rect.x, y: rect.y, width: rect.width, height: rect.height,
-                    });
-                }
+            if needs_move {
+                commands.push(RavenAction::MoveWindow {
+                    window_id: wid.clone(),
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                });
             }
 
             self.commanded_geometries.insert(wid.clone(), CommandedGeometry {
@@ -217,19 +173,61 @@ impl RavenController {
             });
         }
 
-        // 5. Gestión de rechazos (Overflow sin espacio en layout)
-        // La migración nativa de ventanas recién creadas ("a lo loco") corrompe el puente en Wayland.
-        // Solución definitiva y estable: Minimizamos todas las ventanas sobrantes (Pila LIFO pura).
-        for win in &windows {
-            if !win.is_floating && !win.is_minimized && !win.is_pip {
-                if !new_layout.contains_key(&win.window_id) {
-                    println!("[TOPOLOGY] Ventana {} rechazada. Minimizando en pila local.", win.window_id);
-                    commands.push(RavenAction::MinimizeWindow {
-                        window_id: win.window_id.clone(),
-                    });
+        for evicted_id in &evicted_windows {
+            if let Some(win_node) = windows.iter().find(|w| &w.window_id == evicted_id) {
+                let mut outputs = Vec::new();
+                for key in workspaces.keys() {
+                    if let Some(out) = key.split("||").next() {
+                        let out_str = out.to_string();
+                        if !outputs.contains(&out_str) {
+                            outputs.push(out_str);
+                        }
+                    }
                 }
+
+                if outputs.len() > 1 && outputs.iter().any(|o| o != &win_node.output) {
+                    if let Some(target_out) = outputs.iter().find(|&o| o != &win_node.output) {
+                        println!("[TOPOLOGY] Ventana {} desalojada. Migrando a monitor secundario: {}.", evicted_id, target_out);
+                        commands.push(RavenAction::MigrateToOutput {
+                            window_id: evicted_id.clone(),
+                            target_output: target_out.clone(),
+                        });
+                        continue;
+                    }
+                }
+
+                let mut desktops = Vec::new();
+                for key in workspaces.keys() {
+                    let mut parts = key.split("||");
+                    if let (Some(out), Some(desk)) = (parts.next(), parts.next()) {
+                        if out == win_node.output {
+                            let desk_str = desk.to_string();
+                            if !desktops.contains(&desk_str) {
+                                desktops.push(desk_str);
+                            }
+                        }
+                    }
+                }
+
+                let current_desk = win_node.desktops.first().cloned().unwrap_or_default();
+                if desktops.len() > 1 && desktops.iter().any(|d| d != &current_desk) {
+                    if let Some(target_desk) = desktops.iter().find(|&d| d != &current_desk) {
+                        println!("[TOPOLOGY] Ventana {} desalojada. Migrando a escritorio virtual secundario: {}.", evicted_id, target_desk);
+                        commands.push(RavenAction::MigrateToDesktop {
+                            window_id: evicted_id.clone(),
+                            target_desktop: target_desk.clone(),
+                        });
+                        continue;
+                    }
+                }
+
+                println!("[TOPOLOGY] Ventana {} desalojada sin escape. Minimizando en pila local.", evicted_id);
+                commands.push(RavenAction::MinimizeWindow {
+                    window_id: evicted_id.clone(),
+                });
             }
         }
+
 
         self.last_known_layout = new_layout;
         Ok(commands)
@@ -241,13 +239,14 @@ impl RavenController {
     /// realizar un recálculo masivo del layout.
     /// 
     /// # Parámetros
-    /// * `action` - Nombre de la acción solicitada.
-    /// * `payload` - Valor numérico asociado a la acción.
-    /// * `windows` - Estado actual de las ventanas para contexto de navegación.
-    /// * `active_window_id` - ID de la ventana con el foco actual.
+    /// * `action` - Nombre de la acción de atajo solicitada.
+    /// * `payload` - Modificador de la acción.
+    /// * `windows` - Lista de ventanas actuales del dominio.
+    /// * `_workspaces` - Mapa de espacios de trabajo del sistema.
+    /// * `active_window_id` - ID de la ventana activa enfocada.
     /// 
-    /// # Retorno
-    /// Una tupla indicando si requiere recálculo y la lista de acciones inmediatas.
+    /// # Retornos
+    /// Tupla con indicador de recálculo necesario y listado de acciones a disparar.
     pub fn handle_shortcut(
         &mut self,
         action: String,
@@ -256,6 +255,8 @@ impl RavenController {
         _workspaces: HashMap<String, Rect>,
         active_window_id: Option<String>
     ) -> Result<(bool, Vec<RavenAction>), RavenError> {
+        self.engine.update_history(&windows);
+
         let mut needs_recalc = false;
         let mut commands = Vec::new();
 
@@ -298,17 +299,46 @@ impl RavenController {
             },
             "migrate_active_to_screen" | "migrate_active_to_desktop" | "migrate_active_to_prev_screen" | "migrate_active_to_prev_desktop" => {
                 if let Some(ref wid) = active_window_id {
-                    let direction = match action.as_str() {
-                        "migrate_active_to_screen" => "screen_next",
-                        "migrate_active_to_prev_screen" => "screen_prev",
-                        "migrate_active_to_desktop" => "desktop_next",
-                        "migrate_active_to_prev_desktop" => "desktop_prev",
-                        _ => "screen_next",
-                    };
-                    commands.push(RavenAction::MigrateNative {
-                        window_id: wid.clone(),
-                        direction: direction.to_string(),
-                    });
+                    if let Some(win_node) = windows.iter().find(|w| &w.window_id == wid) {
+                        let is_desktop = action.contains("desktop");
+                        if is_desktop {
+                            let mut desktops = Vec::new();
+                            for key in _workspaces.keys() {
+                                let mut parts = key.split("||");
+                                if let (Some(out), Some(desk)) = (parts.next(), parts.next()) {
+                                    if out == win_node.output {
+                                        let desk_str = desk.to_string();
+                                        if !desktops.contains(&desk_str) {
+                                            desktops.push(desk_str);
+                                        }
+                                    }
+                                }
+                            }
+                            let current_desk = win_node.desktops.first().cloned().unwrap_or_default();
+                            if let Some(target_desk) = desktops.iter().find(|&d| d != &current_desk) {
+                                commands.push(RavenAction::MigrateToDesktop {
+                                    window_id: wid.clone(),
+                                    target_desktop: target_desk.clone(),
+                                });
+                            }
+                        } else {
+                            let mut outputs = Vec::new();
+                            for key in _workspaces.keys() {
+                                if let Some(out) = key.split("||").next() {
+                                    let out_str = out.to_string();
+                                    if !outputs.contains(&out_str) {
+                                        outputs.push(out_str);
+                                    }
+                                }
+                            }
+                            if let Some(target_out) = outputs.iter().find(|&o| o != &win_node.output) {
+                                commands.push(RavenAction::MigrateToOutput {
+                                    window_id: wid.clone(),
+                                    target_output: target_out.clone(),
+                                });
+                            }
+                        }
+                    }
                 }
             },
             _ => {}
