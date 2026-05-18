@@ -10,7 +10,11 @@ PlasmoidItem {
     id: root
     
     property bool isEngineEnabled: true
+    property int monitorCount: 1
+    property int desktopCount: 1
     property string queryCmd: "dbus-send --session --print-reply=literal --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.getTilingState"
+    property string queryMonitorsCmd: "dbus-send --session --print-reply=literal --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.getMonitorCount"
+    property string queryDesktopsCmd: "dbus-send --session --print-reply=literal --type=method_call --dest=org.kde.raven.Daemon /Events org.kde.raven.Events.getDesktopCount"
 
     // --- Lógica de Comunicación ---
     function execDbus(method, args) {
@@ -24,7 +28,11 @@ PlasmoidItem {
         root.isEngineEnabled = !root.isEngineEnabled;
     }
 
-    function queryState() { executable.exec(queryCmd); }
+    function queryState() { 
+        executable.exec(queryCmd);
+        executable.exec(queryMonitorsCmd);
+        executable.exec(queryDesktopsCmd);
+    }
 
     onExpandedChanged: {
         if (expanded) { queryState(); }
@@ -35,9 +43,17 @@ PlasmoidItem {
         engine: "executable"
         connectedSources: []
         onNewData: (sourceName, data) => {
-            if (sourceName === root.queryCmd && data["stdout"] !== undefined) {
-                let output = data["stdout"].trim().toLowerCase();
-                root.isEngineEnabled = output.includes("true");
+            if (data["stdout"] !== undefined) {
+                let output = data["stdout"].trim();
+                if (sourceName === root.queryCmd) {
+                    root.isEngineEnabled = output.toLowerCase().includes("true");
+                } else if (sourceName === root.queryMonitorsCmd) {
+                    let val = parseInt(output, 10);
+                    root.monitorCount = isNaN(val) ? 1 : val;
+                } else if (sourceName === root.queryDesktopsCmd) {
+                    let val = parseInt(output, 10);
+                    root.desktopCount = isNaN(val) ? 1 : val;
+                }
             }
             disconnectSource(sourceName);
         }
@@ -178,6 +194,71 @@ PlasmoidItem {
                         spacing: Kirigami.Units.smallSpacing
                         PlasmaComponents.Button { icon.name: "zoom-out"; Layout.fillWidth: true; onClicked: root.execDbus("incrementGaps", "int32:-2") }
                         PlasmaComponents.Button { icon.name: "zoom-in"; Layout.fillWidth: true; onClicked: root.execDbus("incrementGaps", "int32:2") }
+                    }
+                }
+            }
+
+            // Sección de Migración Premium (Nueva característica)
+            Kirigami.Heading {
+                text: "Enviar Foco Activo"
+                level: 4
+                opacity: 0.8
+            }
+
+            GridLayout {
+                columns: 2
+                Layout.fillWidth: true
+                rowSpacing: Kirigami.Units.largeSpacing
+                columnSpacing: Kirigami.Units.largeSpacing
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+                    PlasmaComponents.Label { 
+                        text: "Monitor (" + root.monitorCount + ")"
+                        Layout.alignment: Qt.AlignHCenter 
+                        opacity: 0.8 
+                        font.pixelSize: Kirigami.Units.gridUnit * 0.7 
+                    }
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        PlasmaComponents.Button { 
+                            icon.name: "go-previous" 
+                            Layout.fillWidth: true 
+                            enabled: root.monitorCount > 1 
+                            onClicked: root.execDbus("migrateActiveToPrevScreen", "") 
+                        }
+                        PlasmaComponents.Button { 
+                            icon.name: "go-next" 
+                            Layout.fillWidth: true 
+                            enabled: root.monitorCount > 1 
+                            onClicked: root.execDbus("migrateActiveToScreen", "") 
+                        }
+                    }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+                    PlasmaComponents.Label { 
+                        text: "Escritorio (" + root.desktopCount + ")"
+                        Layout.alignment: Qt.AlignHCenter 
+                        opacity: 0.8 
+                        font.pixelSize: Kirigami.Units.gridUnit * 0.7 
+                    }
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        PlasmaComponents.Button { 
+                            icon.name: "go-up" 
+                            Layout.fillWidth: true 
+                            enabled: root.desktopCount > 1 
+                            onClicked: root.execDbus("migrateActiveToPrevDesktop", "") 
+                        }
+                        PlasmaComponents.Button { 
+                            icon.name: "go-down" 
+                            Layout.fillWidth: true 
+                            enabled: root.desktopCount > 1 
+                            onClicked: root.execDbus("migrateActiveToDesktop", "") 
+                        }
                     }
                 }
             }

@@ -427,6 +427,40 @@ impl RavenDBusService {
         let ctrl = self.controller.lock().await;
         ctrl.is_tiling_enabled()
     }
+
+    /// Cuenta la cantidad de monitores (pantallas) conectados en la topología.
+    #[zbus(name = "getMonitorCount")]
+    async fn get_monitor_count(&self) -> i32 {
+        let payload_json = self.last_payload_json.lock().await.clone();
+        if let Ok((workspaces, _)) = parse_payload(&payload_json) {
+            let mut outputs = std::collections::HashSet::new();
+            for key in workspaces.keys() {
+                if let Some(out) = key.split("||").next() {
+                    outputs.insert(out.to_string());
+                }
+            }
+            std::cmp::max(1, outputs.len() as i32)
+        } else {
+            1
+        }
+    }
+
+    /// Cuenta la cantidad de escritorios virtuales activos en la topología.
+    #[zbus(name = "getDesktopCount")]
+    async fn get_desktop_count(&self) -> i32 {
+        let payload_json = self.last_payload_json.lock().await.clone();
+        if let Ok((workspaces, _)) = parse_payload(&payload_json) {
+            let mut desktops = std::collections::HashSet::new();
+            for key in workspaces.keys() {
+                if let Some(desk) = key.split("||").nth(1) {
+                    desktops.insert(desk.to_string());
+                }
+            }
+            std::cmp::max(1, desktops.len() as i32)
+        } else {
+            1
+        }
+    }
 }
 
 impl RavenDBusService {

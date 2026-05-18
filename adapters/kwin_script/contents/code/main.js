@@ -394,7 +394,16 @@ function applyCommands(commandsJson) {
                             var targetFound = false;
                             for (var k = 0; k < outs.length; k++) {
                                 if (outs[k].name === cmd.target_ws) {
-                                    w.output = outs[k];
+                                    // [NUEVO]: Reflexión dinámica para API de monitores
+                                    if (typeof workspace.sendClientToScreen === "function") {
+                                        try {
+                                            workspace.sendClientToScreen(w, outs[k]); // Invocación nativa Wayland
+                                        } catch (e) {
+                                            w.output = outs[k]; // Fallback si sendClientToScreen falla internamente
+                                        }
+                                    } else {
+                                        w.output = outs[k]; // Fallback clásico si la API no está expuesta
+                                    }
                                     targetFound = true;
                                     break;
                                 }
@@ -549,7 +558,14 @@ function bindWindow(w) {
         try {
             w.minimizedChanged.connect(function() {
                 try {
-                    if (w && !w.deleted && !w.__raven_mutating) requestStateSync();
+                    if (w && !w.deleted && !w.__raven_mutating) {
+                        var hasMove = ("interactiveMove" in w);
+                        var hasResize = ("interactiveResize" in w);
+                        var isInteracting = (hasMove && w.interactiveMove) || (hasResize && w.interactiveResize);
+                        if (!isInteracting) {
+                            requestStateSync();
+                        }
+                    }
                 } catch(e) {}
             });
         } catch(e) { print("[Raven] Error connecting minimizedChanged: " + e); }
@@ -557,7 +573,14 @@ function bindWindow(w) {
         try {
             w.outputChanged.connect(function() {
                 try {
-                    if (w && !w.deleted && !w.__raven_mutating) requestStateSync();
+                    if (w && !w.deleted && !w.__raven_mutating) {
+                        var hasMove = ("interactiveMove" in w);
+                        var hasResize = ("interactiveResize" in w);
+                        var isInteracting = (hasMove && w.interactiveMove) || (hasResize && w.interactiveResize);
+                        if (!isInteracting) {
+                            requestStateSync();
+                        }
+                    }
                 } catch(e) {}
             });
         } catch(e) { print("[Raven] Error connecting outputChanged: " + e); }
@@ -565,7 +588,14 @@ function bindWindow(w) {
         try {
             w.desktopsChanged.connect(function() {
                 try {
-                    if (w && !w.deleted && !w.__raven_mutating) requestStateSync();
+                    if (w && !w.deleted && !w.__raven_mutating) {
+                        var hasMove = ("interactiveMove" in w);
+                        var hasResize = ("interactiveResize" in w);
+                        var isInteracting = (hasMove && w.interactiveMove) || (hasResize && w.interactiveResize);
+                        if (!isInteracting) {
+                            requestStateSync();
+                        }
+                    }
                 } catch(e) {}
             });
         } catch(e) { print("[Raven] Error connecting desktopsChanged: " + e); }
@@ -575,11 +605,16 @@ function bindWindow(w) {
                 try {
                     if (!w || w.deleted) return;
 
-                    if (w.interactiveMove || w.interactiveResize) { 
+                    // [NUEVO]: Verificación segura de propiedades dinámicas
+                    var hasMove = ("interactiveMove" in w);
+                    var hasResize = ("interactiveResize" in w);
+                    var isInteracting = (hasMove && w.interactiveMove) || (hasResize && w.interactiveResize);
+
+                    if (isInteracting) { 
                         w.__was_interacting = true; 
-                        return; 
+                        return; // Bloqueamos el reporte mientras el usuario arrastra
                     }
-                    if (w.__was_interacting && !w.interactiveMove && !w.interactiveResize) {
+                    if (w.__was_interacting && !isInteracting) {
                         w.__was_interacting = false; 
                         requestStateSync(); 
                         return;
@@ -605,6 +640,19 @@ function bindWindow(w) {
                 } catch(e) { print("[Raven] Error frameGeometryChanged callback: " + e); }
             });
         } catch(e) { print("[Raven] Error connecting frameGeometryChanged: " + e); }
+
+        // [NUEVO]: Vinculación segura de señales experimentales
+        try {
+            if (w.interactiveMoveResizeFinished !== undefined) {
+                w.interactiveMoveResizeFinished.connect(function() {
+                    try {
+                        if (!w || w.deleted) return;
+                        w.__was_interacting = false;
+                        requestStateSync(); // Disparamos la recalculación de mosaico
+                    } catch(e) {}
+                });
+            }
+        } catch(e) { print("[Raven] Señal interactiveMoveResizeFinished no disponible: " + e); }
         
     } catch(e) { print("[Raven] Error bindWindow: " + e); }
 }
