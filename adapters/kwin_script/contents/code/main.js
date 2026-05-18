@@ -118,6 +118,41 @@ function syncState() {
     var winState = [];
     var screens = {};
     
+    // [NUEVO]: Pre-poblar todas las combinaciones de pantallas y escritorios virtuales activos
+    try {
+        var outs = workspace.outputs || [];
+        var desks = workspace.desktops || [];
+        for (var o = 0; o < outs.length; o++) {
+            var output = outs[o];
+            var outName = output ? output.name : "default";
+            if (desks && desks.length > 0) {
+                for (var d = 0; d < desks.length; d++) {
+                    var desktop = desks[d];
+                    var deskId = desktop ? desktop.id.toString() : "default_desk";
+                    var wsId = outName + "||" + deskId;
+                    try {
+                        var area = workspace.clientArea(KWin.PlacementArea, output, desktop);
+                        screens[wsId] = {
+                            x: Math.round(area.x), y: Math.round(area.y),
+                            w: Math.round(area.width), h: Math.round(area.height)
+                        };
+                    } catch(e) {}
+                }
+            } else {
+                var currentDesk = workspace.currentDesktop;
+                var deskId = currentDesk ? currentDesk.id.toString() : "default_desk";
+                var wsId = outName + "||" + deskId;
+                try {
+                    var area = workspace.clientArea(KWin.PlacementArea, output, currentDesk);
+                    screens[wsId] = {
+                        x: Math.round(area.x), y: Math.round(area.y),
+                        w: Math.round(area.width), h: Math.round(area.height)
+                    };
+                } catch(e) {}
+            }
+        }
+    } catch(e) { print("[Raven] Error pre-poblando screens: " + e); }
+    
     for (var i = 0; i < windows.length; i++) {
         var w = windows[i];
         try {
