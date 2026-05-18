@@ -59,17 +59,23 @@ pub fn calculate_master_stack(
     master_ratio: f32,
     default_gaps: i32,
 ) -> (HashMap<String, Rect>, Vec<String>) {
-    
+    let mut layout_map = HashMap::new();
+    let mut evicted_windows = Vec::new();
+
+    // Si Wayland reporta un monitor fantasma, de transición o minimizado, abortamos el cálculo.
+    let total_area = screen_rect.width * screen_rect.height;
+    if total_area <= 0 || screen_rect.width <= 0 || screen_rect.height <= 0 {
+        return (layout_map, evicted_windows);
+    }
+
     // Filtrar solo las ventanas que deben ser organizadas (no flotantes ni minimizadas)
     let active_windows: Vec<&WindowNode> = windows.iter()
         .filter(|w| !w.is_floating && !w.is_minimized)
         .collect();
 
     let count = active_windows.len();
-    let mut layout_map = HashMap::with_capacity(count);
-    let mut evicted_windows = Vec::new();
-
     if count == 0 { return (layout_map, evicted_windows); }
+    layout_map.reserve(count);
 
     let g = default_gaps;
     let half_g = g / 2;

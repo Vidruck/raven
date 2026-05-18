@@ -199,13 +199,13 @@ function syncState() {
     var masterOutputs = [];
     var outs = workspace.outputs || [];
     for (var o = 0; o < outs.length; o++) {
-        if (outs[o]) masterOutputs.push(outs[o].name);
+        if (outs[o] && outs[o].name) masterOutputs.push(outs[o].name.toString());
     }
 
     var masterDesktops = [];
     var desks = workspace.desktops || [];
     for (var d = 0; d < desks.length; d++) {
-        if (desks[d]) masterDesktops.push(desks[d].id.toString());
+        if (desks[d] && desks[d].id) masterDesktops.push(desks[d].id.toString());
     }
 
     var payload = { 
