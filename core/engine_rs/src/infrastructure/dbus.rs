@@ -64,6 +64,14 @@ pub struct KWinWindow {
     pub sb: bool,
 }
 
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct KWinTopology {
+    #[serde(default)]
+    pub outputs: Vec<String>,
+    #[serde(default)]
+    pub desktops: Vec<String>,
+}
+
 /// Estructura raíz que contiene el estado completo del compositor.
 #[derive(Debug, Deserialize)]
 pub struct KWinPayload {
@@ -73,6 +81,9 @@ pub struct KWinPayload {
     /// Mapa de pantallas detectadas por su identificador.
     #[serde(default)]
     pub screens: HashMap<String, KWinScreen>,
+    /// Topología explícita de monitores y escritorios virtuales.
+    #[serde(default)]
+    pub topology: KWinTopology,
 }
 
 /// Procesa la cadena JSON cruda proveniente de KWin y la convierte a objetos de dominio.
@@ -81,9 +92,9 @@ pub struct KWinPayload {
 /// de dominio puro (`Rect`, `WindowNode`) para desacoplar la lógica de negocio.
 fn parse_payload(
     payload_json: &str,
-) -> Result<(HashMap<String, Rect>, Vec<WindowNode>), RavenError> {
+) -> Result<(HashMap<String, Rect>, Vec<WindowNode>, KWinTopology), RavenError> {
     if payload_json.is_empty() || payload_json == "{}" {
-        return Ok((HashMap::new(), Vec::new()));
+        return Ok((HashMap::new(), Vec::new(), KWinTopology::default()));
     }
     let payload: KWinPayload = serde_json::from_str(payload_json)
         .map_err(|e| RavenError::ValidationError(format!("Payload KWin inválido: {}", e)))?;
@@ -110,7 +121,7 @@ fn parse_payload(
         ));
     }
 
-    Ok((workspaces, windows))
+    Ok((workspaces, windows, payload.topology))
 }
 
 /// Objeto de Transferencia de Datos (DTO) para comandos de posicionamiento.
@@ -186,6 +197,8 @@ pub struct RavenDBusService {
     pub active_window_id: Arc<Mutex<Option<String>>>,
     /// Último estado completo recibido (cacheado para recálculos rápidos).
     pub last_payload_json: Arc<Mutex<String>>,
+    /// Topología explícita del sistema.
+    pub current_topology: Arc<Mutex<KWinTopology>>,
     /// Manejador inyectado del runtime de Tokio para delegar tareas.
     pub tokio_handle: Handle,
 }
@@ -230,14 +243,17 @@ impl RavenDBusService {
         let controller_clone = Arc::clone(&self.controller);
         let pending_clone = Arc::clone(&self.pending_commands);
         let payload_clone = Arc::clone(&self.last_payload_json);
+        let topology_clone = Arc::clone(&self.current_topology);
 
         self.tokio_handle.spawn(async move {
             *(payload_clone.lock().await) = payload_json.clone();
 
-            let (workspaces, windows) = match parse_payload(&payload_json) {
+            let (workspaces, windows, topology) = match parse_payload(&payload_json) {
                 Ok(p) => p,
                 Err(_) => return,
             };
+
+            *(topology_clone.lock().await) = topology;
 
             let mut ctrl = controller_clone.lock().await;
             match ctrl.handle_state_change(workspaces, windows) {
@@ -431,15 +447,9 @@ impl RavenDBusService {
     /// Cuenta la cantidad de monitores (pantallas) conectados en la topología.
     #[zbus(name = "getMonitorCount")]
     async fn get_monitor_count(&self) -> i32 {
-        let payload_json = self.last_payload_json.lock().await.clone();
-        if let Ok((workspaces, _)) = parse_payload(&payload_json) {
-            let mut outputs = std::collections::HashSet::new();
-            for key in workspaces.keys() {
-                if let Some(out) = key.split("||").next() {
-                    outputs.insert(out.to_string());
-                }
-            }
-            std::cmp::max(1, outputs.len() as i32)
+        let topo = self.current_topology.lock().await;
+        if !topo.outputs.is_empty() {
+            topo.outputs.len() as i32
         } else {
             1
         }
@@ -448,15 +458,9 @@ impl RavenDBusService {
     /// Cuenta la cantidad de escritorios virtuales activos en la topología.
     #[zbus(name = "getDesktopCount")]
     async fn get_desktop_count(&self) -> i32 {
-        let payload_json = self.last_payload_json.lock().await.clone();
-        if let Ok((workspaces, _)) = parse_payload(&payload_json) {
-            let mut desktops = std::collections::HashSet::new();
-            for key in workspaces.keys() {
-                if let Some(desk) = key.split("||").nth(1) {
-                    desktops.insert(desk.to_string());
-                }
-            }
-            std::cmp::max(1, desktops.len() as i32)
+        let topo = self.current_topology.lock().await;
+        if !topo.desktops.is_empty() {
+            topo.desktops.len() as i32
         } else {
             1
         }
@@ -477,8 +481,8 @@ impl RavenDBusService {
         }
 
         let active_id = self.active_window_id.lock().await.clone();
-        let (workspaces, parsed_windows) =
-            parse_payload(&payload_json).unwrap_or_else(|_| (HashMap::new(), Vec::new()));
+        let (workspaces, parsed_windows, _topology) =
+            parse_payload(&payload_json).unwrap_or_else(|_| (HashMap::new(), Vec::new(), KWinTopology::default()));
 
         let mut ctrl = self.controller.lock().await;
         match ctrl.handle_shortcut(
@@ -497,7 +501,7 @@ impl RavenDBusService {
                 queue.extend(dbus_commands);
 
                 if needs_recalc {
-                    if let Ok((workspaces, windows)) = parse_payload(&payload_json) {
+                    if let Ok((workspaces, windows, _topology)) = parse_payload(&payload_json) {
                         match ctrl.handle_state_change(workspaces, windows) {
                             Ok(recalc_cmds) => {
                                 let recalc_dbus_cmds: Vec<TilingCommand> =

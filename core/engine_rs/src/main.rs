@@ -6,7 +6,7 @@ use std::error::Error;
 use raven_core::infrastructure::config::RavenConfig;
 use raven_core::application::engine::TilingEngine;
 use raven_core::application::controller::RavenController;
-use raven_core::infrastructure::dbus::RavenDBusService;
+use raven_core::infrastructure::dbus::{RavenDBusService, KWinTopology};
 
 /// Punto de entrada principal del demonio Raven Tiling Emulator.
 /// 
@@ -31,6 +31,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         pending_commands: Arc::new(Mutex::new(Vec::new())),
         active_window_id: Arc::new(Mutex::new(None)),
         last_payload_json: Arc::new(Mutex::new(String::from("{}"))),
+        current_topology: Arc::new(Mutex::new(KWinTopology::default())),
         tokio_handle,
     };
 

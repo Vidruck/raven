@@ -117,8 +117,6 @@ function syncState() {
     var windows = workspace.windowList();
     var winState = [];
     var screens = {};
-    
-    // [NUEVO]: Pre-poblar todas las combinaciones de pantallas y escritorios virtuales activos
     try {
         var outs = workspace.outputs || [];
         var desks = workspace.desktops || [];
@@ -198,7 +196,23 @@ function syncState() {
         } catch (e) { print("[Raven] Error en syncState: " + e); }
     }
     
-    var payload = { windows: winState, screens: screens };
+    var masterOutputs = [];
+    var outs = workspace.outputs || [];
+    for (var o = 0; o < outs.length; o++) {
+        if (outs[o]) masterOutputs.push(outs[o].name);
+    }
+
+    var masterDesktops = [];
+    var desks = workspace.desktops || [];
+    for (var d = 0; d < desks.length; d++) {
+        if (desks[d]) masterDesktops.push(desks[d].id.toString());
+    }
+
+    var payload = { 
+        windows: winState, 
+        screens: screens,
+        topology: { outputs: masterOutputs, desktops: masterDesktops }
+    };
     try {
         callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "syncState", JSON.stringify(payload));
     } catch (e) { print("[Raven Bridge] D-bus Drop: " + e); }
@@ -274,7 +288,9 @@ function migrateWindow(win, target_ws) {
                 break;
             }
         }
-    } catch (e) { print("[Raven] Error migración: " + e); }
+    } catch (e) {
+        print("[Raven] Error migración: " + e);
+    }
 }
 
 /**
@@ -429,15 +445,14 @@ function applyCommands(commandsJson) {
                             var targetFound = false;
                             for (var k = 0; k < outs.length; k++) {
                                 if (outs[k].name === cmd.target_ws) {
-                                    // [NUEVO]: Reflexión dinámica para API de monitores
                                     if (typeof workspace.sendClientToScreen === "function") {
                                         try {
-                                            workspace.sendClientToScreen(w, outs[k]); // Invocación nativa Wayland
+                                            workspace.sendClientToScreen(w, outs[k]); 
                                         } catch (e) {
-                                            w.output = outs[k]; // Fallback si sendClientToScreen falla internamente
+                                            w.output = outs[k];
                                         }
                                     } else {
-                                        w.output = outs[k]; // Fallback clásico si la API no está expuesta
+                                        w.output = outs[k];
                                     }
                                     targetFound = true;
                                     break;
@@ -490,14 +505,13 @@ function applyCommands(commandsJson) {
                         } catch(e) { print("[Raven] Error apply migrate_to_desktop: " + e); }
                     }
                     
-                    break; // Salimos del for interior una vez encontrada y procesada la ventana
+                    break; 
                 }
             }
         }
     } catch (e) { print("[Raven Bridge] Error applyCommands: " + e); }
 }
 
-// Estado y temporizador de supervisión para el bucle de escucha de comandos
 var _is_listening = false;
 var _watchdog_timer = null;
 var _active_timers = [];
@@ -640,14 +654,13 @@ function bindWindow(w) {
                 try {
                     if (!w || w.deleted) return;
 
-                    // [NUEVO]: Verificación segura de propiedades dinámicas
                     var hasMove = ("interactiveMove" in w);
                     var hasResize = ("interactiveResize" in w);
                     var isInteracting = (hasMove && w.interactiveMove) || (hasResize && w.interactiveResize);
 
                     if (isInteracting) { 
                         w.__was_interacting = true; 
-                        return; // Bloqueamos el reporte mientras el usuario arrastra
+                        return; 
                     }
                     if (w.__was_interacting && !isInteracting) {
                         w.__was_interacting = false; 
@@ -676,14 +689,13 @@ function bindWindow(w) {
             });
         } catch(e) { print("[Raven] Error connecting frameGeometryChanged: " + e); }
 
-        // [NUEVO]: Vinculación segura de señales experimentales
         try {
             if (w.interactiveMoveResizeFinished !== undefined) {
                 w.interactiveMoveResizeFinished.connect(function() {
                     try {
                         if (!w || w.deleted) return;
                         w.__was_interacting = false;
-                        requestStateSync(); // Disparamos la recalculación de mosaico
+                        requestStateSync();
                     } catch(e) {}
                 });
             }
@@ -697,7 +709,7 @@ function bindWindow(w) {
  * registrando las ventanas existentes e iniciando la escucha de comandos.
  */
 function init() {
-    print("[Raven Bridge] Inicializando v2.8 (Debounce 60ms)...");
+    print("[Raven Bridge] Inicializando v2.6 (Debounce 60ms)...");
     
     try {
         var initialWindows = workspace.windowList();
@@ -713,7 +725,7 @@ function init() {
     }
 
     try {
-        var _quarantine_classes = ["firefox", "electron", "zen-browser", "code", "spotify"];
+        var _quarantine_classes = ["firefox", "electron", "zen-browser", "code", "spotify", "floorp"];
 
         workspace.windowAdded.connect(function(w) { 
             try {

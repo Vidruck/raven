@@ -111,8 +111,9 @@ pub fn calculate_master_stack(
     
     let stack_area_width = usable_rect.width - master_area_width;
 
-    // Calcular capacidad predictiva (Pila Dinámica)
-    let min_height_master = std::cmp::max(1, min_allowed_area / std::cmp::max(1, master_area_width));
+    // Calcular capacidad predictiva (Pila Dinámica) de forma Gap-Aware
+    let safe_master_w = std::cmp::max(1, master_area_width - g);
+    let min_height_master = std::cmp::max(1, (min_allowed_area / safe_master_w) + g);
     let max_masters_capacity = std::cmp::max(1, (usable_rect.height / min_height_master) as usize);
     
     let safe_nmaster = std::cmp::min(nmaster, max_masters_capacity);
@@ -121,7 +122,8 @@ pub fn calculate_master_stack(
     has_stack = count > actual_nmaster;
 
     let max_stack_capacity = if has_stack {
-        let min_height_stack = std::cmp::max(1, min_allowed_area / std::cmp::max(1, stack_area_width));
+        let safe_stack_w = std::cmp::max(1, stack_area_width - g);
+        let min_height_stack = std::cmp::max(1, (min_allowed_area / safe_stack_w) + g);
         (usable_rect.height / min_height_stack) as usize
     } else {
         0
