@@ -47,6 +47,12 @@ pub struct WindowNode {
     pub is_pip: bool,
     /// Geometría actual de la ventana reportada por el compositor.
     pub geometry: Rect,
+    /// Ancho mínimo innegociable reportado por KWin.
+    pub min_w: i32,
+    /// Alto mínimo innegociable reportado por KWin.
+    pub min_h: i32,
+    /// Bandera que indica si la ventana es estricta y recién nacida (requiere feedback).
+    pub strict_birth: bool,
 }
 
 impl WindowNode {
@@ -60,6 +66,9 @@ impl WindowNode {
         is_minimized: bool,
         is_pip: bool,
         geometry: Rect,
+        min_w: i32,
+        min_h: i32,
+        strict_birth: bool,
     ) -> Self {
         WindowNode {
             window_id,
@@ -70,6 +79,9 @@ impl WindowNode {
             is_minimized,
             is_pip,
             geometry,
+            min_w,
+            min_h,
+            strict_birth,
         }
     }
 }

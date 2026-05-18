@@ -6,10 +6,22 @@
 use std::collections::HashMap;
 use crate::domain::geometry::{Rect, WindowNode};
 
-/// Porcentaje mínimo del área de la pantalla que puede ocupar una ventana.
-/// Si el cálculo resulta en un área menor, la ventana será rechazada del layout
-/// para que el controlador la migre.
-const MIN_AREA_PERCENTAGE: f32 = 0.08;
+/// Calcula dinámicamente el área mínima permitida basándose en la resolución de la pantalla.
+fn calculate_dynamic_min_area(screen_width: i32, screen_height: i32) -> i32 {
+    let total_pixels = screen_width as f64 * screen_height as f64;
+    
+    let percentage = if total_pixels <= 1_100_000.0 {
+        0.12 // Pantallas muy pequeñas (720p/HD): 12%
+    } else if total_pixels <= 2_500_000.0 {
+        0.08 // Pantallas laptop/normales (1080p): 8%
+    } else if total_pixels <= 5_000_000.0 {
+        0.05 // Monitores grandes (1440p): 5%
+    } else {
+        0.03 // Monitores gigantes (4K+): 3%
+    };
+    
+    (total_pixels * percentage) as i32
+}
 
 /// Aplica un espaciado (gap) interno a un rectángulo.
 ///
@@ -73,7 +85,7 @@ pub fn calculate_master_stack(
     // Si solo hay una ventana, ocupa toda la pantalla (con gaps)
     if count == 1 {
         let final_rect = apply_gaps(&screen_rect, g);
-        let min_allowed_area = (screen_rect.width as f32 * screen_rect.height as f32 * MIN_AREA_PERCENTAGE) as i32;
+        let min_allowed_area = calculate_dynamic_min_area(screen_rect.width, screen_rect.height);
         if final_rect.width * final_rect.height >= min_allowed_area {
             layout_map.insert(active_windows[0].window_id.clone(), final_rect);
         } else {
@@ -83,7 +95,7 @@ pub fn calculate_master_stack(
     }
 
     // Umbral mínimo de área permitido
-    let min_allowed_area = (screen_rect.width as f32 * screen_rect.height as f32 * MIN_AREA_PERCENTAGE) as i32;
+    let min_allowed_area = calculate_dynamic_min_area(screen_rect.width, screen_rect.height);
 
     // Suposición inicial
     let mut has_stack = count > nmaster;
@@ -282,6 +294,9 @@ mod tests {
             false,
             false,
             Rect::new(0, 0, 0, 0),
+            0,
+            0,
+            false,
         )
     }
 

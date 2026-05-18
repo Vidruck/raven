@@ -60,6 +60,8 @@ pub struct KWinWindow {
     pub min_w:i32,
     #[serde(default)]
     pub min_h:i32,
+    #[serde(default)]
+    pub sb: bool,
 }
 
 /// Estructura raíz que contiene el estado completo del compositor.
@@ -102,6 +104,9 @@ fn parse_payload(
             win.m,
             win.p,
             Rect::new(win.x, win.y, win.w, win.h),
+            win.min_w,
+            win.min_h,
+            win.sb,
         ));
     }
 
@@ -159,6 +164,9 @@ impl From<RavenAction> for TilingCommand {
             },
             RavenAction::UnminimizeWindow { window_id } => TilingCommand {
                 action: "unminimize".to_string(), window_id: Some(window_id), x: None, y: None, width: None, height: None, target_ws: None, direction: None,
+            },
+            RavenAction::RequestFeedback { window_id } => TilingCommand {
+                action: "request_feedback".to_string(), window_id: Some(window_id), x: None, y: None, width: None, height: None, target_ws: None, direction: None,
             },
         }
     }
@@ -278,6 +286,9 @@ impl RavenDBusService {
                     win.m,
                     win.p,
                     Rect::new(win.x, win.y, win.w, win.h),
+                    win.min_w,
+                    win.min_h,
+                    win.sb,
                 );
 
                 let mut ctrl = controller_clone.lock().await;

@@ -155,7 +155,10 @@ function syncState() {
                 m: Boolean(w.minimized), 
                 p: Boolean(w.keepAbove),
                 x: Math.round(geom.x), y: Math.round(geom.y),
-                w: Math.round(geom.width), h: Math.round(geom.height)
+                w: Math.round(geom.width), h: Math.round(geom.height),
+                min_w: w.minSize ? Math.round(w.minSize.width) : 0,
+                min_h: w.minSize ? Math.round(w.minSize.height) : 0,
+                sb: Boolean(w.__raven_strict_birth)
             });
         } catch (e) { print("[Raven] Error en syncState: " + e); }
     }
@@ -197,7 +200,10 @@ function syncWindowDelta(w) {
             m: Boolean(w.minimized),
             p: Boolean(w.keepAbove),
             x: Math.round(geom.x), y: Math.round(geom.y),
-            w: Math.round(geom.width), h: Math.round(geom.height)
+            w: Math.round(geom.width), h: Math.round(geom.height),
+            min_w: w.minSize ? Math.round(w.minSize.width) : 0,
+            min_h: w.minSize ? Math.round(w.minSize.height) : 0,
+            sb: Boolean(w.__raven_strict_birth)
         };
 
         callDBus("org.kde.raven.Daemon", "/Events", "org.kde.raven.Events", "syncWindowDelta", JSON.stringify(deltaPayload));
@@ -340,6 +346,14 @@ function applyCommands(commandsJson) {
                         
                     } else if (cmd.action === "focus") {
                         try { workspace.activeWindow = w; } catch(e){}
+                        
+                    } else if (cmd.action === "request_feedback") {
+                        try {
+                            if (w.__raven_strict_birth) {
+                                w.__raven_strict_birth = false; // Limpiar para que suceda solo 1 vez
+                                syncWindowDelta(w);
+                            }
+                        } catch(e) { print("[Raven] Error apply request_feedback: " + e); }
                         
                     } else if (cmd.action === "minimize") {
                         try {
@@ -638,6 +652,7 @@ function init() {
                         try {
                             if (w && !w.deleted) {
                                 w.__raven_quarantined = false;
+                                w.__raven_strict_birth = true;
                                 bindWindow(w); 
                                 requestStateSync(); 
                             }

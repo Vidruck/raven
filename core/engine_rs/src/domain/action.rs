@@ -9,4 +9,5 @@ pub enum RavenAction {
     MigrateToDesktop { window_id: String, target_desktop: String },
     MinimizeWindow { window_id: String },
     UnminimizeWindow { window_id: String },
+    RequestFeedback { window_id: String },
 }

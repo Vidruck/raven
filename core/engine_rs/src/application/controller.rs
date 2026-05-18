@@ -150,7 +150,9 @@ impl RavenController {
         let mut windows = healthy_windows;
 
         windows.sort_by_key(|w| {
-            self.engine.window_history.iter().position(|id| id == &w.window_id).unwrap_or(usize::MAX)
+            let is_strict = w.min_w > 0 || w.min_h > 0;
+            let pos = self.engine.window_history.iter().position(|id| id == &w.window_id).unwrap_or(usize::MAX);
+            (!is_strict, std::cmp::Reverse(pos))
         });
 
         let (new_layout, evicted_windows) = self.engine.calculate_from_payload(workspaces.clone(), windows.clone())?;
@@ -170,6 +172,15 @@ impl RavenController {
                     width: rect.width,
                     height: rect.height,
                 });
+                
+                // Si la ventana es estricta y recién nacida, solicitamos rectificación
+                if let Some(win_node) = windows.iter().find(|w| &w.window_id == wid) {
+                    if win_node.strict_birth {
+                        commands.push(RavenAction::RequestFeedback {
+                            window_id: wid.clone(),
+                        });
+                    }
+                }
             }
 
             self.commanded_geometries.insert(wid.clone(), CommandedGeometry {
